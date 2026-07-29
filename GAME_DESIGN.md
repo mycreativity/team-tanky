@@ -94,7 +94,11 @@ Diepte zit in **beslissingen die iets kosten**, niet in meer knoppen:
    - **Speler-combo's = ruimtelijk & automatisch** (geen combo-knoppen): Scout spot zwakke plek → licht op voor hele team; reviven binnen Medic-shield = beschermd; Bruiser trekt aandacht → bully toont zwakke kant aan Sniper. Diepte via plek & timing, niet knoppenkennis.
 3. **Schieten verraadt je** → ritme van verbergen → hinderlaag → verplaatsen. Baiten mogelijk (één lokt, rest flankt).
 4. **Bully skill-ceiling**: zware schot timen, team naar lava/open terrein drijven, executen-vs-jagen, onderdelen beschermen.
-5. **Vuur-model (geen "altijd raak")**: AI leidt z'n doel voor (lead) en heeft **spreiding die groeit met doelsnelheid, afstand en eigen beweging** → stil staan = makkelijk te raken, blijven bewegen = ontwijken. De **bully is artillerie**: z'n granaat heeft **splash** (near-misses tellen) → het team moet **spreiden** i.p.v. in een kringetje om de bully te rijden.
+5. **Vuur-model (echt 3D, geen "altijd raak")**:
+   - **Kleine tanks = direct vuur in 3D**: kogel richt op de werkelijke 3D-positie (mét hoogteverschil); een heuvel ertussen blokkeert het schot, een rots is dekking.
+   - **Bully = artillerie met echte boog**: ballistische oplossing (zwaartekracht) → hij **lobt** de granaat over dekking heen en die komt naar beneden op het voorspelde inslagpunt, met **splash**. Team moet **spreiden**, niet in een kringetje rijden.
+   - **Lead + spreiding** die groeit met doelsnelheid, afstand en eigen beweging → stilstaan = makkelijk te raken, bewegen = ontwijken.
+   - **Swept-sphere collision** (traject i.p.v. punt) zodat snelle/boog-kogels niet door tanks tunnelen.
 
 ## Progressie / retentie
 - **Camo-unlocks** (horizontaal, cosmetisch) naarmate je beter wordt = status-haak.

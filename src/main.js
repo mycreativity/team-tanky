@@ -370,24 +370,88 @@ if (new URLSearchParams(location.search).has('debug')) window.__tanks = tanks;
 // ---------------------------------------------------------------------------
 const projectiles = [];
 const effects = [];
-const BULLY_SPLASH = 8; // de bully = artillerie: granaat met explosieradius
+const BULLY_SPLASH = 8;   // de bully = artillerie: explosieradius
+const BULLY_VH = 46;      // horizontale snelheid van de boog-granaat
+const SHELL_GRAVITY = 34; // zwaartekracht op de bully-granaat
+
 const projGeo = new THREE.SphereGeometry(1, 8, 8);
 const boomGeo = new THREE.SphereGeometry(1, 14, 14);
 const projMatTeam = new THREE.MeshBasicMaterial({ color: 0xbfefff });
 const projMatBoss = new THREE.MeshBasicMaterial({ color: 0xffb0b0 });
 
-function fire(t, targetYaw) {
+// Mondingpositie in 3D (romp + torenhoogte + loop vooruit).
+function muzzleOf(t, yaw) {
   const s = t.stats;
-  const dir = new THREE.Vector3(Math.sin(targetYaw), 0, Math.cos(targetYaw));
-  const origin = t.group.position.clone()
-    .add(new THREE.Vector3(0, 1.55 * s.scale, 0))
-    .add(dir.clone().multiplyScalar(t.barrelLen));
-  const mesh = new THREE.Mesh(projGeo, t.faction === 'boss' ? projMatBoss : projMatTeam);
-  mesh.scale.setScalar(s.pradius);
+  return new THREE.Vector3(
+    t.group.position.x + Math.sin(yaw) * t.barrelLen,
+    t.group.position.y + 1.55 * s.scale,
+    t.group.position.z + Math.cos(yaw) * t.barrelLen,
+  );
+}
+function spawnProjectile(origin, vel, faction, dmg, splash, gravity, pradius) {
+  const mesh = new THREE.Mesh(projGeo, faction === 'boss' ? projMatBoss : projMatTeam);
+  mesh.scale.setScalar(pradius);
   mesh.position.copy(origin);
   scene.add(mesh);
-  const splash = t.faction === 'boss' ? BULLY_SPLASH : 0;
-  projectiles.push({ mesh, vel: dir.multiplyScalar(s.pspeed), life: 2.6, dmg: s.dmg, faction: t.faction, splash });
+  projectiles.push({ mesh, prev: origin.clone(), vel: vel.clone(), life: gravity ? 5 : 2.4, dmg, faction, splash, gravity });
+}
+// Ballistische oplossing: welke beginsnelheid landt op T vanaf S, met horizontale snelheid vH?
+function ballistic(S, T, vH, g) {
+  const dx = T.x - S.x, dz = T.z - S.z;
+  const dxz = Math.hypot(dx, dz) || 0.001;
+  const tf = dxz / vH;
+  const vy = (T.y - S.y + 0.5 * g * tf * tf) / tf;
+  const inv = vH / dxz;
+  return new THREE.Vector3(dx * inv, vy, dz * inv);
+}
+// Kortste afstand van punt P tot lijnstuk A-B (voor swept-sphere collision).
+function closestOnSeg(A, B, P) {
+  const abx = B.x - A.x, aby = B.y - A.y, abz = B.z - A.z;
+  const ab2 = abx * abx + aby * aby + abz * abz || 1e-6;
+  let tt = ((P.x - A.x) * abx + (P.y - A.y) * aby + (P.z - A.z) * abz) / ab2;
+  tt = Math.max(0, Math.min(1, tt));
+  const cx = A.x + abx * tt, cy = A.y + aby * tt, cz = A.z + abz * tt;
+  return { dist: Math.hypot(P.x - cx, P.y - cy, P.z - cz), point: new THREE.Vector3(cx, cy, cz) };
+}
+
+// AI schiet met lead + spreiding. Bully = boogschot (artillerie), rest = direct 3D-vuur.
+function aiFire(shooter, target) {
+  const s = shooter.stats;
+  const isBully = shooter.faction === 'boss';
+  const sp = shooter.group.position, tp = target.group.position;
+  const dist = Math.hypot(tp.x - sp.x, tp.z - sp.z);
+  const vH = isBully ? BULLY_VH : s.pspeed;
+  const tf = dist / vH;
+  // lead: voorspel positie na vluchttijd
+  let ax = tp.x + target.vel.x * tf;
+  let az = tp.z + target.vel.z * tf;
+  // spreiding: laterale/diepte-fout die groeit met doelsnelheid, afstand, eigen beweging
+  const err = Math.tan(aimSpread(shooter, target, dist)) * dist;
+  ax += (Math.random() * 2 - 1) * err;
+  az += (Math.random() * 2 - 1) * err;
+  const ay = terrainHeight(ax, az) + GRAV_HOVER * target.stats.scale;
+  const yaw = Math.atan2(ax - sp.x, az - sp.z);
+  shooter.turretYaw = yaw;
+  const muzzle = muzzleOf(shooter, yaw);
+  const aim = new THREE.Vector3(ax, ay, az);
+  if (isBully) {
+    spawnProjectile(muzzle, ballistic(muzzle, aim, vH, SHELL_GRAVITY), 'boss', s.dmg, BULLY_SPLASH, SHELL_GRAVITY, 0.8);
+  } else {
+    const dir = aim.sub(muzzle).normalize();
+    spawnProjectile(muzzle, dir.multiplyScalar(s.pspeed), shooter.faction, s.dmg, 0, 0, 0.35);
+  }
+}
+// Speler schiet: direct 3D-vuur naar het richtpunt (op het doel bij lock, anders op de grond onder het vizier).
+function playerFire() {
+  const s = player.stats;
+  const yaw = player.turretYaw;
+  const muzzle = muzzleOf(player, yaw);
+  let aim;
+  if (lockTarget && !lockTarget.dead) { aim = lockTarget.group.position.clone(); aim.y += 1.2 * lockTarget.stats.scale; }
+  else { aim = reticle.position.clone(); aim.y += 0.8; }
+  const dir = aim.sub(muzzle);
+  if (dir.lengthSq() < 1e-4) dir.set(Math.sin(yaw), 0, Math.cos(yaw));
+  spawnProjectile(muzzle, dir.normalize().multiplyScalar(s.pspeed), 'team', s.dmg, 0, 0, 0.35);
 }
 
 // Schade toepassen op een tank (bully via onderdelen, rest via hp).
@@ -509,14 +573,6 @@ function nearest(t, list) {
 }
 function yawTo(from, to) {
   return Math.atan2(to.x - from.x, to.z - from.z);
-}
-// Doelvoorspelling: richt op waar het doel ZAL zijn als de granaat aankomt.
-function leadYaw(shooter, target, projSpeed) {
-  const sp = shooter.group.position, tp = target.group.position;
-  let tt = sp.distanceTo(tp) / projSpeed;
-  const px = tp.x + target.vel.x * tt;
-  const pz = tp.z + target.vel.z * tt;
-  return Math.atan2(px - sp.x, pz - sp.z);
 }
 // Spreiding (half-hoek in rad): sneller/verder doel = minder raak; rijdend schieten = minder raak.
 function aimSpread(shooter, target, dist) {
@@ -665,13 +721,13 @@ function updateTank(t, dt) {
       move.add(new THREE.Vector3(-toT.z, 0, toT.x).multiplyScalar(0.6));
       move.add(t.wander.clone().multiplyScalar(0.3));
       if (move.lengthSq() > 0.001) { move.normalize(); dir.copy(move); t.heading = lerpAngle(t.heading, Math.atan2(move.x, move.z), 0.12); }
-      // richten + schieten (alleen als de toren nog leeft) — met lead + spreiding
+      // richten + schieten (alleen als de toren nog leeft)
       if (canAim) {
-        t.turretYaw = leadYaw(t, target, s.pspeed);
+        t.turretYaw = yawTo(t.group.position, target.group.position); // toren volgt doel (visueel)
         t.fireTimer -= dt;
-        if (t.fireTimer <= 0 && dist < 55) {
-          const spread = aimSpread(t, target, dist);
-          fire(t, t.turretYaw + (Math.random() * 2 - 1) * spread);
+        const range = t.faction === 'boss' ? 75 : 55;
+        if (t.fireTimer <= 0 && dist < range) {
+          aiFire(t, target);
           t.fireTimer = s.cd * (0.85 + Math.random() * 0.4);
         }
       }
@@ -709,7 +765,7 @@ function updateTank(t, dt) {
       t.turretYaw = lerpAngle(t.turretYaw, target, 0.35); // draaisnelheid turret
     } else { lockTarget = null; }
     t.fireTimer -= dt;
-    if (aim.fire && t.fireTimer <= 0) { fire(t, t.turretYaw); t.fireTimer = s.cd; }
+    if (aim.fire && t.fireTimer <= 0) { playerFire(); t.fireTimer = s.cd; }
 
     // richtertje plaatsen: op het doel (rood) of vooruit langs de loop (wit)
     reticle.visible = true;
@@ -734,40 +790,38 @@ function updateTank(t, dt) {
 function updateProjectiles(dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
+    pr.prev.copy(pr.mesh.position);
+    if (pr.gravity) pr.vel.y -= pr.gravity * dt;
     pr.mesh.position.addScaledVector(pr.vel, dt);
     pr.life -= dt;
     const pos = pr.mesh.position;
-    const expired = pr.life <= 0 || Math.abs(pos.y) > 40;
     let done = false;
 
-    if (pr.splash > 0) {
-      // Bully-granaat: ontploft bij een rots, aan het eind, óf op het dichtste punt
-      // bij een teamtank (airburst) zodat near-misses binnen de splash tóch treffen.
-      let boom = rockBlocks(pos) || expired;
-      if (!boom) {
-        let nd = Infinity;
-        for (const t of tanks) {
-          if (t.dead || t.faction === pr.faction) continue;
-          const d = pos.distanceTo(t.group.position); if (d < nd) nd = d;
-        }
-        const armed = nd < pr.splash * 1.3;
-        if (nd < 2.5) boom = true;                                   // directe treffer
-        else if (armed && nd > (pr.prevNd ?? Infinity)) boom = true; // net het dichtste punt voorbij
-        pr.prevNd = nd;
-      }
-      if (boom) { explode(pos, pr); done = true; }
-    } else {
-      // Team-granaat: precies, één doel. Rots = dekking.
-      if (rockBlocks(pos)) done = true;
-      else {
-        for (const t of tanks) {
-          if (t.dead || t.faction === pr.faction) continue;
-          if (pos.distanceTo(t.group.position) < t.radius) { applyDamage(t, pos, pr.dmg); done = true; break; }
-        }
-      }
-      if (!done && expired) done = true;
+    // 1) grond-inslag (correcte hoogte!): kogel onder het terrein = geraakt de grond
+    if (pos.y <= terrainHeight(pos.x, pos.z)) {
+      if (pr.splash > 0) explode(pos, pr);
+      done = true;
     }
+    // 2) rots-dekking (blokkeert alleen als de kogel laag genoeg is; boog gaat eroverheen)
+    if (!done && rockBlocks(pos)) { if (pr.splash > 0) explode(pos, pr); done = true; }
 
+    // 3) tanks — swept-sphere over het traject van deze frame (geen tunnelen)
+    if (!done) {
+      for (const t of tanks) {
+        if (t.dead || t.faction === pr.faction) continue;
+        const cp = closestOnSeg(pr.prev, pos, t.group.position);
+        if (cp.dist < t.radius) {
+          if (pr.splash > 0) explode(cp.point, pr);
+          else applyDamage(t, cp.point, pr.dmg);
+          done = true; break;
+        }
+      }
+    }
+    // 4) uitgedoofd (te ver / te lang onderweg)
+    if (!done && (pr.life <= 0 || Math.abs(pos.y) > 60)) {
+      if (pr.splash > 0) explode(pos, pr);
+      done = true;
+    }
     if (done) { scene.remove(pr.mesh); projectiles.splice(i, 1); }
   }
 }
@@ -853,15 +907,21 @@ function newMap() {
 }
 document.getElementById('newmap').addEventListener('click', newMap);
 
+const fsEl = document.documentElement;
+const reqFS = fsEl.requestFullscreen || fsEl.webkitRequestFullscreen || fsEl.mozRequestFullScreen || fsEl.msRequestFullscreen;
+const exitFS = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+const fsActive = () => document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
 async function goFullscreen() {
-  try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); }
-  catch (e) { /* geweigerd / niet ondersteund */ }
-  try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); }
-  catch (e) { /* lock alleen mogelijk in fullscreen op sommige toestellen */ }
+  if (!reqFS) return false; // niet ondersteund (o.a. iPhone Safari)
+  try { await reqFS.call(fsEl); } catch (e) { return false; }
+  try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); } catch (e) { /* alleen in FS op sommige toestellen */ }
+  return true;
 }
-document.getElementById('fsbtn').addEventListener('click', () => {
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  else goFullscreen();
+document.getElementById('fsbtn').addEventListener('click', async () => {
+  if (fsActive()) { if (exitFS) exitFS.call(document); return; }
+  const ok = await goFullscreen();
+  if (!ok) toast('Fullscreen niet ondersteund in deze browser', '#ffd27a');
 });
 
 function start() {
