@@ -13,6 +13,7 @@ Alles draait in de browser (game-AI = simpele state machine, geen server), dus h
 - **Procedureel (seeded) terrein** met hoogteverschil (gras/zand/water/rots) + gestrooide bomen & rotsen; "🔀 Nieuwe map"-knop, `?seed=` reproduceerbaar
 - **Twin-stick besturing** met manuele aim + **klein richtvierkantje** en kleine soft-lock
 - **Locational damage op de bully**: Romp / Toren / Rups L / Rups R apart kapot (rupsen kapot = vast, toren kapot = kan niet richten, romp kapot = verslagen)
+- **Dekking & camo**: rotsen blokkeren schoten; stil in een bos-grove = **verborgen** (bully negeert je, geen soft-lock, half-transparant)
 - Grotere, tragere, harder rakende AI-bully + AI-teamgenoten
 - Health-bars, respawn, username-onboarding (localStorage)
 - **Landscape + fullscreen** (fullscreen-knop; landscape-hint in portrait)
@@ -53,6 +54,6 @@ GAME_DESIGN.md          # volledig game-ontwerp
 
 ## Volgende stappen
 
-- Dekking & camo koppelen aan het terrein (rotsen blokkeren schoten, bos verlaagt zichtbaarheid/lock)
+- Line-of-sight: rotsen/heuvels ook AI-zicht laten blokkeren (nu blokkeren rotsen alleen schoten)
 - Escalatie-mechaniek voor lange potjes (map krimpt / sudden death)
 - Multiplayer (stap 2): realtime backend (PartyKit / Colyseus / eigen WS), client blijft op Pages

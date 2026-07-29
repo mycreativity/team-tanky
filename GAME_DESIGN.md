@@ -79,7 +79,7 @@ Maps zijn **procedureel maar begrensd** — niet volledig willekeurig (dat breek
 - **Procedureel binnen authored grenzen**: generator vult hoogte (fBm-noise), biomes en begroeiing; regels bewaken vaste arena-grenzen, veilige spawnzones en een gegarandeerde mix van dekking/camo/hoogte.
 - **Features rule-based gestrooid**: bomen (bos/camo) op gras, rotsen (dekking) op hoogte, buiten spawn-buffer en water.
 - **Meta-bonus**: elke map anders → camo-keuze-per-potje blijft elke match vers.
-- *Prototype-status*: geïmplementeerd in de spike (seeded fBm-terrein + gestrooide bomen/rotsen + "nieuwe map"-knop; `?seed=` in de URL is reproduceerbaar). Collision/LOS voor dekking & camo-effect nog te koppelen.
+- *Prototype-status*: geïmplementeerd in de spike (seeded fBm-terrein + rotsen + bomen in **dichte groves** + "nieuwe map"-knop; `?seed=` reproduceerbaar). **Dekking**: rotsen blokkeren schoten. **Camo**: stil in het bos = verborgen (bully negeert je behalve van dichtbij, geen soft-lock, half-transparant + HP-balk weg).
 
 ## Hoogteverschil
 - Tanks kunnen wat **hoger/lager** rijden.

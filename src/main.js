@@ -104,6 +104,8 @@ function terrainHeight(x, z) {
 
 let terrainMesh = null;
 let featureGroup = null;
+let coverRocks = [];   // {x, z, r, topY} — blokkeren schoten (dekking)
+let forestTrees = [];  // {x, z} — bos (camo/verbergen)
 
 function buildTerrainMesh() {
   const size = 260, seg = 120, step = size / seg, half = size / 2;
@@ -155,16 +157,36 @@ function scatterFeatures() {
   const rand = mulberry32((SEED ^ 0x9e3779b9) >>> 0);
   featureGroup = new THREE.Group();
   const trees = [], rocks = [];
+  coverRocks = []; forestTrees = [];
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), S = new THREE.Vector3();
 
-  for (let n = 0; n < 900; n++) {
+  // Rotsen (dekking): verspreid op hoger terrein.
+  for (let n = 0; n < 700; n++) {
     const x = (rand() - 0.5) * 2 * (ARENA - 4);
     const z = (rand() - 0.5) * 2 * (ARENA - 4);
-    if (Math.hypot(x, z) < 12) continue;          // bully-spawn vrij
+    if (Math.hypot(x, z) < 12) continue;
     const y = terrainHeight(x, z);
-    if (y < -2.5) continue;                        // geen bomen/rots in water
-    if (y < 2.5 && rand() < 0.55) trees.push([x, y, z, 0.7 + rand() * 0.9, rand() * 6.28]);
-    else if (y >= 4.0 && rand() < 0.7) rocks.push([x, y, z, 0.7 + rand() * 1.4, rand() * 6.28]);
+    if (y >= 4.0 && rand() < 0.7) rocks.push([x, y, z, 0.7 + rand() * 1.4, rand() * 6.28]);
+  }
+
+  // Bomen (camo): in dichte groves zodat "verbergen in het bos" echt werkt.
+  const GROVES = 16;
+  for (let gi = 0; gi < GROVES; gi++) {
+    let cx, cz, tries = 0;
+    if (gi === 0) { cx = (rand() - 0.5) * 40; cz = 46 + (rand() - 0.5) * 12; } // authored: grove bij team-spawn
+    else {
+      do { cx = (rand() - 0.5) * 2 * (ARENA - 14); cz = (rand() - 0.5) * 2 * (ARENA - 14); tries++; }
+      while ((Math.hypot(cx, cz) < 16 || terrainHeight(cx, cz) < -1 || terrainHeight(cx, cz) > 3.5) && tries < 8);
+    }
+    const count = 12 + Math.floor(rand() * 16);
+    for (let k = 0; k < count; k++) {
+      const ang = rand() * 6.28, rad = 1.5 + rand() * 10;
+      const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
+      if (Math.hypot(x, z) < 12) continue;
+      const y = terrainHeight(x, z);
+      if (y < -1.5 || y > 4) continue;
+      trees.push([x, y, z, 0.7 + rand() * 0.9, rand() * 6.28]);
+    }
   }
 
   if (trees.length) {
@@ -180,6 +202,7 @@ function scatterFeatures() {
       Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot);
       P.set(x, y + 0.8 * s, z); S.set(s, s, s); M.compose(P, Q, S); trunkIM.setMatrixAt(i, M);
       P.set(x, y + 2.4 * s, z); M.compose(P, Q, S); canopyIM.setMatrixAt(i, M);
+      forestTrees.push({ x, z });
     });
     trunkIM.instanceMatrix.needsUpdate = true; canopyIM.instanceMatrix.needsUpdate = true;
     featureGroup.add(trunkIM, canopyIM);
@@ -194,6 +217,7 @@ function scatterFeatures() {
       const [x, y, z, s, rot] = r;
       Q.setFromAxisAngle(new THREE.Vector3(0.2, 1, 0.1).normalize(), rot);
       P.set(x, y + 0.5 * s, z); S.set(s, s * 0.8, s); M.compose(P, Q, S); rockIM.setMatrixAt(i, M);
+      coverRocks.push({ x, z, r: s * 1.25 + 0.6, topY: y + s * 1.7 + 1 });
     });
     rockIM.instanceMatrix.needsUpdate = true;
     featureGroup.add(rockIM);
@@ -282,6 +306,7 @@ function spawnTank(kind, faction, isPlayer = false) {
     heading: 0, turretYaw: 0,
     fireTimer: 0, dead: false, respawn: 0,
     wander: new THREE.Vector3(), wanderT: 0,
+    hidden: false, speedNow: 0,
     bar,
   };
   // Bully: locational damage — losse onderdelen met eigen HP.
@@ -307,6 +332,7 @@ function placeTank(t, center) {
   t.group.position.set(x, terrainHeight(x, z) + GRAV_HOVER, z);
   t.hp = t.maxHp; t.dead = false;
   t.group.visible = true;
+  setTankHidden(t, false);
   if (t.parts) {
     for (const key in t.parts) {
       const part = t.parts[key];
@@ -464,6 +490,7 @@ let lockTarget = null; // door applySoftLock gezet; gebruikt door het richtertje
 function applySoftLock(from, yaw) {
   let best = null, bestAbs = SOFT_LOCK_CONE;
   for (const e of aliveTargetsFor(player)) {
+    if (e.hidden) continue; // verborgen doelen kun je niet locken (camo)
     if (from.distanceTo(e.group.position) > SOFT_LOCK_RANGE) continue;
     const d = Math.abs(angleDelta(yaw, yawTo(from, e.group.position)));
     if (d < bestAbs) { bestAbs = d; best = e; }
@@ -471,6 +498,41 @@ function applySoftLock(from, yaw) {
   lockTarget = best;
   if (best) return lerpAngle(yaw, yawTo(from, best.group.position), SOFT_LOCK_PULL);
   return yaw;
+}
+
+// --- Camo (bos) & dekking (rots) ---
+// Aantal bomen dicht bij (x,z); >=2 = in het bos.
+function foliageAt(x, z) {
+  let n = 0;
+  for (let i = 0; i < forestTrees.length; i++) {
+    const dx = forestTrees[i].x - x, dz = forestTrees[i].z - z;
+    if (dx * dx + dz * dz < 49 && ++n >= 2) return n; // binnen 7u
+  }
+  return n;
+}
+// Doelen die de AI mag zien: verborgen doelen vallen weg, behalve heel dichtbij.
+function visibleTargetsFor(t) {
+  return aliveTargetsFor(t).filter((o) => !o.hidden || t.group.position.distanceTo(o.group.position) < 14);
+}
+// Zet camo-visuals aan/uit (half-transparant + HP-balk weg).
+function setTankHidden(t, hidden) {
+  if (t.hidden === hidden && t._hiddenInit) return;
+  t.hidden = hidden; t._hiddenInit = true;
+  const P = t.group.userData.parts;
+  for (const m of [P.hull, P.trackL, P.trackR, P.dome, P.barrel]) {
+    m.material.transparent = hidden;
+    m.material.opacity = hidden ? 0.4 : 1;
+  }
+  if (!t.dead && !t.parts) t.bar.visible = !hidden;
+}
+// Blokkeert een rots dit punt? (verticale cilinder-benadering)
+function rockBlocks(pos) {
+  for (let i = 0; i < coverRocks.length; i++) {
+    const rk = coverRocks[i];
+    const dx = pos.x - rk.x, dz = pos.z - rk.z;
+    if (dx * dx + dz * dz < rk.r * rk.r && pos.y < rk.topY) return true;
+  }
+  return false;
 }
 function clampArena(v) {
   v.x = Math.max(-ARENA, Math.min(ARENA, v.x));
@@ -492,6 +554,7 @@ const partFills = {
   trackR: document.getElementById('pb-trackR'),
 };
 const toastEl = document.getElementById('toast');
+const stealthEl = document.getElementById('stealth');
 let toastTimer = 0;
 function toast(msg, color) {
   toastEl.textContent = msg;
@@ -509,6 +572,7 @@ function updateHUD() {
     el.style.setProperty('--v', `${frac * 100}%`);
     el.classList.toggle('dead', part.hp <= 0);
   }
+  stealthEl.style.display = (player.hidden && !player.dead) ? 'block' : 'none';
 }
 
 // ---------------------------------------------------------------------------
@@ -539,7 +603,7 @@ function updateTank(t, dt) {
     if (inp.len > 0.01) t.heading = lerpAngle(t.heading, Math.atan2(inp.x, inp.z), 0.2);
   } else {
     // ---- game-AI: benader doel, houd afstand, omcirkel ----
-    const target = nearest(t, aliveTargetsFor(t));
+    const target = nearest(t, visibleTargetsFor(t)); // verborgen doelen worden genegeerd
     t.wanderT -= dt;
     if (t.wanderT <= 0) { t.wanderT = 1 + Math.random() * 1.5; t.wander.set(Math.random() - 0.5, 0, Math.random() - 0.5); }
     if (target) {
@@ -565,7 +629,8 @@ function updateTank(t, dt) {
     }
   }
 
-  // beweging
+  // beweging (+ werkelijke snelheid bijhouden voor camo)
+  const px0 = t.group.position.x, pz0 = t.group.position.z;
   if (dir.lengthSq() > 0.001 && speedMul > 0) {
     dir.normalize();
     t.group.position.addScaledVector(dir, s.speed * speedMul * dt);
@@ -574,6 +639,13 @@ function updateTank(t, dt) {
   const p = t.group.position;
   p.y = terrainHeight(p.x, p.z) + GRAV_HOVER * s.scale;
   t.group.rotation.y = t.heading;
+  t.speedNow = Math.hypot(p.x - px0, p.z - pz0) / Math.max(dt, 0.001);
+
+  // camo: stil in het bos = verborgen (bully is te groot om te verstoppen)
+  if (!t.parts) {
+    const hide = t.speedNow < 3.5 && foliageAt(p.x, p.z) >= 2;
+    if (hide !== t.hidden) setTankHidden(t, hide);
+  }
 
   // speler-turret: MANUEEL richten (twin-stick / muis) + kleine soft-lock
   if (t.isPlayer) {
@@ -611,13 +683,17 @@ function updateProjectiles(dt) {
     pr.mesh.position.addScaledVector(pr.vel, dt);
     pr.life -= dt;
     let hit = false;
-    for (const t of tanks) {
-      if (t.dead || t.faction === pr.faction) continue;
-      if (pr.mesh.position.distanceTo(t.group.position) < t.radius) {
-        if (t.parts) damageBully(t, pr.mesh.position, pr.dmg);  // locational damage
-        else { t.hp -= pr.dmg; if (t.hp <= 0) onKill(t); }
-        hit = true;
-        break;
+    if (rockBlocks(pr.mesh.position)) {
+      hit = true; // dekking: rots slikt het schot op
+    } else {
+      for (const t of tanks) {
+        if (t.dead || t.faction === pr.faction) continue;
+        if (pr.mesh.position.distanceTo(t.group.position) < t.radius) {
+          if (t.parts) damageBully(t, pr.mesh.position, pr.dmg);  // locational damage
+          else { t.hp -= pr.dmg; if (t.hp <= 0) onKill(t); }
+          hit = true;
+          break;
+        }
       }
     }
     if (hit || pr.life <= 0 || Math.abs(pr.mesh.position.y) > 40) {
