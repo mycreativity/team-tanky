@@ -19,9 +19,10 @@ Alles draait in de browser (game-AI = simpele state machine, geen server), dus h
 - Health-bars, respawn, username-onboarding (localStorage)
 - **Landscape + fullscreen** (fullscreen-knop; landscape-hint in portrait)
 
-**Besturing:**
-- Desktop: `WASD` / pijltjes rijden · muis richt de turret · muisknop schiet
-- Mobiel: links rijden, rechts richten & schieten (met kleine aim-assist)
+**Besturing (artillerie-aim, UI in het Engels):**
+- Desktop: `WASD` rijden · muis zet richting · **RANGE**-slider zet afstand · **Space / FIRE** schiet
+- Mobiel: linker stick rijden · rechter stick richting · **RANGE**-slider afstand · **FIRE**-knop schiet
+- De speler-tank **lobt** een boog-granaat naar (richting × afstand); de camera kijkt verder vooruit bij grotere range
 
 ## Lokaal draaien
 

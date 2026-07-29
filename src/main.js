@@ -370,9 +370,12 @@ if (new URLSearchParams(location.search).has('debug')) window.__tanks = tanks;
 // ---------------------------------------------------------------------------
 const projectiles = [];
 const effects = [];
-const BULLY_SPLASH = 8;   // de bully = artillerie: explosieradius
-const BULLY_VH = 46;      // horizontale snelheid van de boog-granaat
-const SHELL_GRAVITY = 34; // zwaartekracht op de bully-granaat
+const BULLY_SPLASH = 8;   // bully = artillery: explosion radius
+const BULLY_VH = 46;      // horizontal speed of the arcing shell
+const SHELL_GRAVITY = 34; // gravity on arcing shells
+const PLAYER_VH = 44;     // horizontal speed of the player's arcing bombshell
+const PLAYER_SPLASH = 3;  // small blast on the player's shell
+let aimDistance = 34;     // range set by the slider (world units)
 
 const projGeo = new THREE.SphereGeometry(1, 8, 8);
 const boomGeo = new THREE.SphereGeometry(1, 14, 14);
@@ -441,17 +444,22 @@ function aiFire(shooter, target) {
     spawnProjectile(muzzle, dir.multiplyScalar(s.pspeed), shooter.faction, s.dmg, 0, 0, 0.35);
   }
 }
-// Speler schiet: direct 3D-vuur naar het richtpunt (op het doel bij lock, anders op de grond onder het vizier).
+// Player fires an ARCING bombshell that lands on the reticle point (direction × range).
 function playerFire() {
   const s = player.stats;
-  const yaw = player.turretYaw;
-  const muzzle = muzzleOf(player, yaw);
-  let aim;
-  if (lockTarget && !lockTarget.dead) { aim = lockTarget.group.position.clone(); aim.y += 1.2 * lockTarget.stats.scale; }
-  else { aim = reticle.position.clone(); aim.y += 0.8; }
-  const dir = aim.sub(muzzle);
-  if (dir.lengthSq() < 1e-4) dir.set(Math.sin(yaw), 0, Math.cos(yaw));
-  spawnProjectile(muzzle, dir.normalize().multiplyScalar(s.pspeed), 'team', s.dmg, 0, 0, 0.35);
+  const muzzle = muzzleOf(player, player.turretYaw);
+  const aim = reticle.position.clone(); // landing point (ground at dir×range, or a locked target)
+  spawnProjectile(muzzle, ballistic(muzzle, aim, PLAYER_VH, SHELL_GRAVITY), 'team', s.dmg, PLAYER_SPLASH, SHELL_GRAVITY, 0.4);
+}
+// Nearest non-hidden enemy within radius r of a ground point (soft-lock for the range reticle).
+function enemyNearPoint(x, z, r) {
+  let best = null, bd = r * r;
+  for (const e of aliveTargetsFor(player)) {
+    if (e.hidden) continue;
+    const dx = e.group.position.x - x, dz = e.group.position.z - z, d = dx * dx + dz * dz;
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
 }
 
 // Schade toepassen op een tank (bully via onderdelen, rest via hp).
@@ -540,21 +548,31 @@ function moveInput() {
   return { x, z, len: Math.min(len, 1) };
 }
 
-// Bepaalt richt-yaw (of null) + of er gevuurd wordt, uit rechter stick of muis.
-function aimInput() {
-  if (Math.hypot(rightStick.x, rightStick.y) > 0.25) {
-    return { yaw: Math.atan2(rightStick.x, rightStick.y), fire: true };
-  }
+// Aim DIRECTION (yaw) only — from the right stick or the mouse. Distance comes from the slider.
+function aimDirection() {
+  if (Math.hypot(rightStick.x, rightStick.y) > 0.25) return Math.atan2(rightStick.x, rightStick.y);
   if (mouseAimActive) {
     aimPlane.constant = -player.group.position.y;
     aimRay.setFromCamera(mouseNDC, camera);
     const hit = new THREE.Vector3();
     if (aimRay.ray.intersectPlane(aimPlane, hit)) {
-      return { yaw: Math.atan2(hit.x - player.group.position.x, hit.z - player.group.position.z), fire: mouseDown };
+      return Math.atan2(hit.x - player.group.position.x, hit.z - player.group.position.z);
     }
   }
-  return { yaw: null, fire: false };
+  return null;
 }
+
+// FIRE is manual now: FIRE button, Space, or mouse click — never automatic while aiming.
+let fireHeld = false;
+const fireEl = document.getElementById('firebtn');
+fireEl.addEventListener('pointerdown', (e) => { e.preventDefault(); fireHeld = true; });
+fireEl.addEventListener('pointerup', () => { fireHeld = false; });
+fireEl.addEventListener('pointercancel', () => { fireHeld = false; });
+function firePressed() { return fireHeld || keys['Space'] || mouseDown; }
+
+// RANGE slider sets the firing distance.
+const distEl = document.getElementById('dist');
+distEl.addEventListener('input', () => { aimDistance = parseFloat(distEl.value); });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -668,7 +686,7 @@ function toast(msg, color) {
 }
 function updateHUD() {
   whoEl.textContent = `🎮 ${username}`;
-  scoreEl.textContent = `Bully verslagen: ${score}`;
+  scoreEl.textContent = `Bully defeated: ${score}`;
   phpFill.style.width = `${Math.max(0, player.hp / player.maxHp * 100)}%`;
   for (const key in partFills) {
     const part = bully.parts[key], el = partFills[key];
@@ -757,27 +775,26 @@ function updateTank(t, dt) {
     if (hide !== t.hidden) setTankHidden(t, hide);
   }
 
-  // speler-turret: MANUEEL richten (twin-stick / muis) + kleine soft-lock
+  // Player: aim DIRECTION manually, RANGE from the slider, FIRE with the button.
   if (t.isPlayer) {
-    const aim = aimInput();
-    if (aim.yaw !== null) {
-      const target = applySoftLock(t.group.position, aim.yaw);
-      t.turretYaw = lerpAngle(t.turretYaw, target, 0.35); // draaisnelheid turret
-    } else { lockTarget = null; }
-    t.fireTimer -= dt;
-    if (aim.fire && t.fireTimer <= 0) { playerFire(); t.fireTimer = s.cd; }
-
-    // richtertje plaatsen: op het doel (rood) of vooruit langs de loop (wit)
+    const dirYaw = aimDirection();
+    if (dirYaw !== null) t.turretYaw = lerpAngle(t.turretYaw, dirYaw, 0.35);
+    // landing point = direction × range
+    const rx = t.group.position.x + Math.sin(t.turretYaw) * aimDistance;
+    const rz = t.group.position.z + Math.cos(t.turretYaw) * aimDistance;
+    // small soft-lock: snap the reticle onto an enemy near the aim point
+    lockTarget = enemyNearPoint(rx, rz, 8);
     reticle.visible = true;
     if (lockTarget) {
-      reticle.position.copy(lockTarget.group.position); reticle.position.y += 3.2;
+      reticle.position.copy(lockTarget.group.position); reticle.position.y += 1.4 * lockTarget.stats.scale;
       reticle.material.color.setHex(0xff5a5a); reticle.scale.set(3.6, 3.6, 1);
     } else {
-      const ax = t.group.position.x + Math.sin(t.turretYaw) * 26;
-      const az = t.group.position.z + Math.cos(t.turretYaw) * 26;
-      reticle.position.set(ax, terrainHeight(ax, az) + 1.5, az);
+      reticle.position.set(rx, terrainHeight(rx, rz) + 1.0, rz);
       reticle.material.color.setHex(0xffffff); reticle.scale.set(3, 3, 1);
     }
+    // manual fire (not automatic)
+    t.fireTimer -= dt;
+    if (firePressed() && t.fireTimer <= 0) { playerFire(); t.fireTimer = s.cd; }
   }
   // turret visueel richten (relatief t.o.v. de romp)
   t.turret.rotation.y = t.turretYaw - t.heading;
@@ -844,17 +861,17 @@ function damageBully(t, point, dmg) {
     part.hp = 0;
     for (const m of part.meshes) m.material.color.setHex(0x2b2e34); // verwoest -> donker
     if (best === 'hull') onKill(t);
-    else toast(PART_LABELS[best] + ' vernield!', '#ffd27a');
+    else toast(PART_LABELS[best] + ' destroyed!', '#ffd27a');
   }
 }
-const PART_LABELS = { hull: 'Romp', turret: 'Toren', trackL: 'Rups links', trackR: 'Rups rechts' };
+const PART_LABELS = { hull: 'Hull', turret: 'Turret', trackL: 'Left track', trackR: 'Right track' };
 
 function onKill(t) {
   t.dead = true;
   t.group.visible = false; t.bar.visible = false;
   t.respawn = t.faction === 'boss' ? 5 : 4;
-  if (t.faction === 'boss') { score++; toast('BULLY VERSLAGEN! 🎉', '#46e07a'); }
-  else if (t.isPlayer) { toast('Uitgeschakeld — reviven…', '#ff8080'); }
+  if (t.faction === 'boss') { score++; toast('BULLY DOWN! 🎉', '#46e07a'); }
+  else if (t.isPlayer) { toast('Downed — reviving…', '#ff8080'); }
 }
 
 // ---------------------------------------------------------------------------
@@ -862,6 +879,9 @@ function onKill(t) {
 // ---------------------------------------------------------------------------
 let started = false;
 const clock = new THREE.Clock();
+const camPos = camera.position.clone();
+const camLook = new THREE.Vector3();
+const _dp = new THREE.Vector3(), _dl = new THREE.Vector3();
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -872,18 +892,21 @@ function animate() {
     updateHUD();
     if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) toastEl.classList.remove('show'); }
   }
-  // vaste, gekantelde camera die de speler volgt (hoek blijft vast, geen meedraaien).
-  // Subtiele look-ahead richting de aim, zodat je iets meer ziet waar je op richt.
+  // Camera: fixed tilted angle following the player. The set RANGE changes the framing —
+  // longer range looks further ahead toward the landing point and pulls back a bit.
   const target = player.group.position;
-  const lead = 6;
-  const lx = target.x + Math.sin(player.turretYaw) * lead;
-  const lz = target.z + Math.cos(player.turretYaw) * lead;
-  camera.position.set(target.x + CAM_OFFSET.x, target.y + CAM_OFFSET.y, target.z + CAM_OFFSET.z);
-  camera.lookAt(lx, target.y + 2, lz);
-  sun.target.position.copy(target); // schaduw meebewegen
+  const zoom = 1 + (aimDistance - 10) / 95;               // ~1.0 .. ~1.65
+  const lead = aimDistance * 0.5;
+  _dl.set(target.x + Math.sin(player.turretYaw) * lead, target.y + 2, target.z + Math.cos(player.turretYaw) * lead);
+  _dp.set(target.x + CAM_OFFSET.x * zoom, target.y + CAM_OFFSET.y * zoom, target.z + CAM_OFFSET.z * zoom);
+  camPos.lerp(_dp, 0.08); camLook.lerp(_dl, 0.1);
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  sun.target.position.copy(target);
   sun.position.set(target.x + 60, 90, target.z + 40);
   renderer.render(scene, camera);
 }
+camLook.copy(player.group.position);
 animate();
 
 // ---------------------------------------------------------------------------
@@ -921,7 +944,7 @@ async function goFullscreen() {
 document.getElementById('fsbtn').addEventListener('click', async () => {
   if (fsActive()) { if (exitFS) exitFS.call(document); return; }
   const ok = await goFullscreen();
-  if (!ok) toast('Fullscreen niet ondersteund in deze browser', '#ffd27a');
+  if (!ok) toast('Fullscreen not supported in this browser', '#ffd27a');
 });
 
 function start() {
@@ -932,6 +955,9 @@ function start() {
   document.getElementById('hud').classList.remove('hidden');
   document.getElementById('joystick').classList.remove('hidden');
   document.getElementById('aimstick').classList.remove('hidden');
+  document.getElementById('rangebox').classList.remove('hidden');
+  fireEl.classList.remove('hidden');
+  aimDistance = parseFloat(distEl.value);
   showSeed();
   goFullscreen();   // fullscreen + landscape op de start-tap (user gesture)
   started = true;

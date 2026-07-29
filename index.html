@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="nl">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
@@ -15,15 +15,15 @@
   </script>
 </head>
 <body>
-  <!-- Username onboarding (laagdrempelig, prototype) -->
+  <!-- Username onboarding (low-friction, prototype) -->
   <div id="overlay">
     <div class="panel">
       <h1>team-tanky</h1>
-      <p class="tag">prototype spike — jij + AI-team vs. de bully</p>
-      <label for="username">Kies een username</label>
-      <input id="username" maxlength="16" autocomplete="off" placeholder="bijv. Jasper" />
-      <button id="start">Spelen</button>
-      <p class="hint">Desktop: WASD rijden · muis richt de turret · muisknop schiet.<br/>Mobiel: links rijden, rechts richten &amp; schieten (kleine aim-assist).</p>
+      <p class="tag">prototype spike — you + AI team vs. the bully</p>
+      <label for="username">Choose a username</label>
+      <input id="username" maxlength="16" autocomplete="off" placeholder="e.g. Alex" />
+      <button id="start">Play</button>
+      <p class="hint">Desktop: WASD to move · mouse aims direction · slider sets range · Space / FIRE to shoot.<br/>Mobile: left stick moves, right stick aims, slider sets range, FIRE to shoot.</p>
     </div>
   </div>
 
@@ -33,27 +33,32 @@
       <span id="who"></span>
       <span id="score"></span>
     </div>
-    <button id="newmap">🔀 Nieuwe map</button>
+    <button id="newmap">🔀 New map</button>
     <button id="fsbtn" title="Fullscreen">⛶</button>
     <span id="seedlabel"></span>
     <div id="playerhp"><div id="playerhp-fill"></div><span id="playerhp-label">HP</span></div>
-    <div id="stealth">🫥 Verborgen</div>
+    <div id="stealth">🫥 Hidden</div>
     <div id="bullyparts">
       <div class="ptitle">BULLY</div>
-      <div class="pb"><span>Romp</span><div class="pbf" id="pb-hull"></div></div>
-      <div class="pb"><span>Toren</span><div class="pbf" id="pb-turret"></div></div>
-      <div class="pb"><span>Rups L</span><div class="pbf" id="pb-trackL"></div></div>
-      <div class="pb"><span>Rups R</span><div class="pbf" id="pb-trackR"></div></div>
+      <div class="pb"><span>Hull</span><div class="pbf" id="pb-hull"></div></div>
+      <div class="pb"><span>Turret</span><div class="pbf" id="pb-turret"></div></div>
+      <div class="pb"><span>Track L</span><div class="pbf" id="pb-trackL"></div></div>
+      <div class="pb"><span>Track R</span><div class="pbf" id="pb-trackR"></div></div>
     </div>
     <div id="toast"></div>
   </div>
 
-  <!-- Draai-hint: alleen zichtbaar in portrait op mobiel -->
-  <div id="rotate"><div>🔄<br/>Draai je toestel naar<br/><b>landscape</b> om te spelen</div></div>
+  <!-- Landscape hint: only visible in portrait on mobile -->
+  <div id="rotate"><div>🔄<br/>Rotate your device to<br/><b>landscape</b> to play</div></div>
 
-  <!-- Touch controls: links rijden, rechts richten + schieten -->
+  <!-- Touch controls: left = move, right = aim direction, slider = range, FIRE = shoot -->
   <div id="joystick" class="hidden"><div id="joystick-knob"></div></div>
   <div id="aimstick" class="hidden"><div id="aimstick-knob"></div></div>
+  <div id="rangebox" class="hidden">
+    <span id="rangelabel">RANGE</span>
+    <input id="dist" type="range" min="10" max="72" value="34" step="1" />
+  </div>
+  <div id="firebtn" class="hidden">FIRE</div>
 
   <script type="module" src="./src/main.js"></script>
 </body>

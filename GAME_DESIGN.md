@@ -112,18 +112,19 @@ Diepte zit in **beslissingen die iets kosten**, niet in meer knoppen:
 - Tijdelijke **tanksporen** blijven zichtbaar (leesbaarheid slagveld).
 - Interactieve maps.
 
-## Besturing (touch) — TWIN-STICK
-Manuele aim voor meer skill-expressie (doelgroep 13+):
-- **Linkerduim = rij-joystick, omnidirectioneel** (à la Brawl Stars). Werkt met de vaste camera: stick omhoog = altijd "noord".
-- **Rechterduim = richt-joystick**: draait de **turret handmatig** en **schiet** terwijl je richt. Géén auto-aim.
-- **Kleine soft-lock**: kom je met je richting dicht bij een target, dan trekt het vizier er een beetje naartoe (aim-assist, geen volledige lock). Op mobiel haalbaar, beloont goed mikken.
-- **Camera**: vaste hoek, maar met subtiele **look-ahead** richting je aim (je ziet iets meer waar je op richt).
-- **Tanks rijden bewust langzamer** → meer positioneel, minder twitchy.
-- **Desktop**: WASD rijden · muis richt de turret · muisknop schiet.
-- **Locational damage via POSITIE + mikken**: je richt zelf, maar om een specifiek onderdeel (track/turret) te raken moet je ook **flankeren** tot het in zicht komt. Skill = mikken én positioneren. Klikt met armour-angling.
+## Besturing (touch) — ARTILLERIE-AIM
+Manuele aim voor meer skill-expressie (doelgroep 13+). UI-taal = **Engels**.
+- **Linkerduim = rij-joystick, omnidirectioneel** (à la Brawl Stars).
+- **Rechterduim = richt-joystick**: zet de **richting** (turret yaw). (Desktop: muis zet richting.)
+- **RANGE-slider**: zet de **afstand** waar de granaat landt. Richting × afstand = het richtpunt (vierkant vizier).
+- **Boog-granaat**: de speler-tank **lobt** een bombshell die een curve volgt naar het richtpunt (ballistisch, met splash). Gaat dus over dekking heen.
+- **FIRE-knop (of Space)**: schieten is **handmatig**, niet automatisch bij het richten.
+- **Camera volgt de afstand**: grotere range → camera kijkt verder vooruit en zoomt iets uit, zodat je het landingsgebied ziet.
+- **Kleine soft-lock**: staat een vijand vlak bij het richtpunt, dan snapt het vizier erop (rood).
+- **Tanks rijden bewust langzamer** → positioneel, minder twitchy.
 - **Revive**: rij naar wrak → "hou vast"-knop → je staat stil (= het risico).
-- **Bully**: zwaar wapen richt hij ook handmatig (skill-shot, trage herlaad).
-- *Prototype-status*: twin-stick + richtvierkantje + soft-lock + locational damage (Romp/Toren/Rups L/Rups R apart) + landscape/fullscreen geïmplementeerd in de spike. Bully is groter, trager en doet meer schade.
+- **Bully**: eigen ballistische boog + splash (artillerie).
+- *Prototype-status*: richting+range-slider+FIRE-knop, boog-granaten, camera-op-afstand, locational damage, camo/dekking, landscape/fullscreen — geïmplementeerd in de spike. UI volledig in het Engels.
 
 ## Onboarding (prototype)
 - Wie de URL opent en nog **geen sessie** heeft, maakt een **username** aan. Laagdrempelig: geen accounts/wachtwoorden in prototype-fase.
