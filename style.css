@@ -53,18 +53,49 @@ canvas { display: block; }
 }
 #score { color: var(--ok); }
 
-.bar { position: absolute; height: 20px; border-radius: 10px; overflow: hidden; }
-#playerhp, #bullybar {
+#playerhp {
   position: absolute; height: 22px; border-radius: 11px; overflow: hidden;
   border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.45);
+  left: 14px; bottom: 20px; width: min(46vw, 240px);
 }
-#playerhp { left: 14px; bottom: 20px; width: min(46vw, 240px); }
-#bullybar { right: 14px; top: 44px; width: min(50vw, 300px); }
 #playerhp-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #1f9c4f, var(--ok)); transition: width .12s linear; }
-#bullybar-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #a11, var(--bully)); transition: width .12s linear; }
-#playerhp span, #bullybar span {
+#playerhp span {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+
+/* Bully-onderdeelbalken (locational damage) */
+#bullyparts {
+  position: absolute; right: 14px; top: 40px; width: min(52vw, 240px);
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(255,80,80,0.35);
+  border-radius: 10px; padding: 8px 10px;
+}
+#bullyparts .ptitle { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: var(--bully); margin-bottom: 5px; text-align: right; }
+#bullyparts .pb { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+#bullyparts .pb span { font-size: 10px; width: 48px; color: #cdd7e5; flex: none; }
+#bullyparts .pbf {
+  height: 9px; flex: 1; border-radius: 5px; background: rgba(255,255,255,0.12); overflow: hidden; position: relative;
+}
+#bullyparts .pbf::after {
+  content: ''; position: absolute; inset: 0; width: var(--v, 100%);
+  background: linear-gradient(90deg, #a11, var(--bully)); border-radius: 5px; transition: width .12s linear;
+}
+#bullyparts .pbf.dead::after { background: #3a3d44; width: 100% !important; }
+
+#fsbtn {
+  position: absolute; top: 10px; right: 14px; pointer-events: auto; cursor: pointer;
+  width: 34px; height: 34px; border-radius: 8px; font-size: 16px; color: #cfe6ff;
+  background: rgba(20, 30, 46, 0.85); border: 1px solid rgba(120, 160, 220, 0.35);
+}
+
+/* Landscape-hint: alleen tonen in portrait op touch */
+#rotate { display: none; }
+@media (orientation: portrait) and (pointer: coarse) {
+  #rotate {
+    display: flex; position: fixed; inset: 0; z-index: 40;
+    align-items: center; justify-content: center; text-align: center;
+    background: #0b0e14; color: #cfe6ff; font-size: 20px; line-height: 1.6; font-weight: 700;
+  }
 }
 
 #newmap {

@@ -118,6 +118,7 @@ Manuele aim voor meer skill-expressie (doelgroep 13+):
 - **Locational damage via POSITIE + mikken**: je richt zelf, maar om een specifiek onderdeel (track/turret) te raken moet je ook **flankeren** tot het in zicht komt. Skill = mikken én positioneren. Klikt met armour-angling.
 - **Revive**: rij naar wrak → "hou vast"-knop → je staat stil (= het risico).
 - **Bully**: zwaar wapen richt hij ook handmatig (skill-shot, trage herlaad).
+- *Prototype-status*: twin-stick + richtvierkantje + soft-lock + locational damage (Romp/Toren/Rups L/Rups R apart) + landscape/fullscreen geïmplementeerd in de spike. Bully is groter, trager en doet meer schade.
 
 ## Onboarding (prototype)
 - Wie de URL opent en nog **geen sessie** heeft, maakt een **username** aan. Laagdrempelig: geen accounts/wachtwoorden in prototype-fase.

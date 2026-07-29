@@ -34,11 +34,21 @@
       <span id="score"></span>
     </div>
     <button id="newmap">🔀 Nieuwe map</button>
+    <button id="fsbtn" title="Fullscreen">⛶</button>
     <span id="seedlabel"></span>
     <div id="playerhp"><div id="playerhp-fill"></div><span id="playerhp-label">HP</span></div>
-    <div id="bullybar"><div id="bullybar-fill"></div><span id="bullybar-label">BULLY</span></div>
+    <div id="bullyparts">
+      <div class="ptitle">BULLY</div>
+      <div class="pb"><span>Romp</span><div class="pbf" id="pb-hull"></div></div>
+      <div class="pb"><span>Toren</span><div class="pbf" id="pb-turret"></div></div>
+      <div class="pb"><span>Rups L</span><div class="pbf" id="pb-trackL"></div></div>
+      <div class="pb"><span>Rups R</span><div class="pbf" id="pb-trackR"></div></div>
+    </div>
     <div id="toast"></div>
   </div>
+
+  <!-- Draai-hint: alleen zichtbaar in portrait op mobiel -->
+  <div id="rotate"><div>🔄<br/>Draai je toestel naar<br/><b>landscape</b> om te spelen</div></div>
 
   <!-- Touch controls: links rijden, rechts richten + schieten -->
   <div id="joystick" class="hidden"><div id="joystick-knob"></div></div>

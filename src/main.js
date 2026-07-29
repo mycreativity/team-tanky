@@ -14,7 +14,7 @@ const GRAV_HOVER = 1.6;       // hoe hoog de tank boven het terrein 'zweeft'
 const STATS = {
   player: { hp: 100, speed: 17, cd: 0.38, pspeed: 78, dmg: 6,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x2ec4ff },
   ally:   { hp: 100, speed: 15, cd: 0.75, pspeed: 72, dmg: 5,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x36e0a0 },
-  bully:  { hp: 640, speed: 9,  cd: 1.7,  pspeed: 58, dmg: 22, pradius: 0.7,  scale: 2.2, radius: 4.6, color: 0xff4d4d },
+  bully:  { hp: 640, speed: 7,  cd: 1.6,  pspeed: 58, dmg: 34, pradius: 0.8,  scale: 2.2, radius: 4.6, color: 0xff4d4d },
 };
 const SOFT_LOCK_CONE = 0.22; // rad (~13°): kleine aim-assist als je richting in de buurt van een target komt
 const SOFT_LOCK_RANGE = 75;
@@ -217,32 +217,36 @@ generateWorld();
 // ---------------------------------------------------------------------------
 function makeTank(colorHex, scale) {
   const group = new THREE.Group();
-  const body = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.6, metalness: 0.25 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.8 });
+  // per-part materials -> onderdelen kunnen los verkleuren (locational damage)
+  const bodyMat = () => new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.6, metalness: 0.25 });
+  const darkMat = () => new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.8 });
 
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 3.4), body);
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 3.4), bodyMat());
   hull.position.y = 0.9; hull.castShadow = true; group.add(hull);
 
-  // tracks
-  for (const sx of [-1.5, 1.5]) {
-    const tr = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 3.8), dark);
-    tr.position.set(sx, 0.5, 0); tr.castShadow = true; group.add(tr);
-  }
+  const trackL = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 3.8), darkMat());
+  trackL.position.set(-1.5, 0.5, 0); trackL.castShadow = true; group.add(trackL);
+  const trackR = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.8, 3.8), darkMat());
+  trackR.position.set(1.5, 0.5, 0); trackR.castShadow = true; group.add(trackR);
 
   // turret (los object zodat het onafhankelijk kan richten)
   const turret = new THREE.Group();
-  const dome = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 1.8), body);
+  const dome = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 1.8), bodyMat());
   dome.castShadow = true; turret.add(dome);
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 2.6, 12), dark);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 2.6, 12), darkMat());
   barrel.rotation.x = Math.PI / 2;    // langs +Z
   barrel.position.set(0, 0.05, 1.5);
   barrel.castShadow = true; turret.add(barrel);
   turret.position.y = 1.55;
   group.add(turret);
 
+  // originele kleuren onthouden voor reset na respawn
+  for (const m of [hull, trackL, trackR, dome, barrel]) m.userData.orig = m.material.color.getHex();
+
   group.scale.setScalar(scale);
   group.userData.turret = turret;
   group.userData.barrelLen = 2.9 * scale;
+  group.userData.parts = { hull, trackL, trackR, turret, dome, barrel };
   scene.add(group);
   return group;
 }
@@ -280,6 +284,17 @@ function spawnTank(kind, faction, isPlayer = false) {
     wander: new THREE.Vector3(), wanderT: 0,
     bar,
   };
+  // Bully: locational damage — losse onderdelen met eigen HP.
+  if (kind === 'bully') {
+    const P = group.userData.parts;
+    t.parts = {
+      hull:   { hp: 300, max: 300, meshes: [P.hull] },
+      turret: { hp: 150, max: 150, meshes: [P.dome, P.barrel] },
+      trackL: { hp: 120, max: 120, meshes: [P.trackL] },
+      trackR: { hp: 120, max: 120, meshes: [P.trackR] },
+    };
+    t.bar.visible = false; // bully gebruikt de HUD-onderdeelbalken i.p.v. één balk
+  }
   tanks.push(t);
   placeTank(t, kind === 'bully');
   return t;
@@ -291,13 +306,35 @@ function placeTank(t, center) {
   else { x = (Math.random() - 0.5) * 90; z = 40 + Math.random() * 22; } // team spawnt aan één kant
   t.group.position.set(x, terrainHeight(x, z) + GRAV_HOVER, z);
   t.hp = t.maxHp; t.dead = false;
-  t.group.visible = true; t.bar.visible = true;
+  t.group.visible = true;
+  if (t.parts) {
+    for (const key in t.parts) {
+      const part = t.parts[key];
+      part.hp = part.max;
+      for (const m of part.meshes) m.material.color.setHex(m.userData.orig);
+    }
+  } else {
+    t.bar.visible = true;
+  }
 }
 
 const player = spawnTank('player', 'team', true);
 const allies = [spawnTank('ally', 'team'), spawnTank('ally', 'team'), spawnTank('ally', 'team')];
 const bully = spawnTank('bully', 'boss');
 bully.group.position.set(0, terrainHeight(0, 0) + GRAV_HOVER, 0);
+
+// Klein vierkant richtertje dat toont waar je op mikt (rood = soft-lock op een doel).
+function makeReticle() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.strokeStyle = '#ffffff'; g.lineWidth = 7;
+  g.strokeRect(9, 9, 46, 46);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }));
+  spr.scale.set(3, 3, 1); spr.renderOrder = 1000; spr.visible = false;
+  scene.add(spr);
+  return spr;
+}
+const reticle = makeReticle();
 
 // ---------------------------------------------------------------------------
 // Projectiles
@@ -423,6 +460,7 @@ function angleDelta(a, b) {
   return d;
 }
 // Kleine aim-assist: als de richt-yaw binnen een kegel van een vijand valt, trek 'm er een beetje naartoe.
+let lockTarget = null; // door applySoftLock gezet; gebruikt door het richtertje
 function applySoftLock(from, yaw) {
   let best = null, bestAbs = SOFT_LOCK_CONE;
   for (const e of aliveTargetsFor(player)) {
@@ -430,6 +468,7 @@ function applySoftLock(from, yaw) {
     const d = Math.abs(angleDelta(yaw, yawTo(from, e.group.position)));
     if (d < bestAbs) { bestAbs = d; best = e; }
   }
+  lockTarget = best;
   if (best) return lerpAngle(yaw, yawTo(from, best.group.position), SOFT_LOCK_PULL);
   return yaw;
 }
@@ -446,7 +485,12 @@ let score = 0;
 const whoEl = document.getElementById('who');
 const scoreEl = document.getElementById('score');
 const phpFill = document.getElementById('playerhp-fill');
-const bbFill = document.getElementById('bullybar-fill');
+const partFills = {
+  hull: document.getElementById('pb-hull'),
+  turret: document.getElementById('pb-turret'),
+  trackL: document.getElementById('pb-trackL'),
+  trackR: document.getElementById('pb-trackR'),
+};
 const toastEl = document.getElementById('toast');
 let toastTimer = 0;
 function toast(msg, color) {
@@ -459,7 +503,12 @@ function updateHUD() {
   whoEl.textContent = `🎮 ${username}`;
   scoreEl.textContent = `Bully verslagen: ${score}`;
   phpFill.style.width = `${Math.max(0, player.hp / player.maxHp * 100)}%`;
-  bbFill.style.width = `${Math.max(0, bully.hp / bully.maxHp * 100)}%`;
+  for (const key in partFills) {
+    const part = bully.parts[key], el = partFills[key];
+    const frac = Math.max(0, part.hp / part.max);
+    el.style.setProperty('--v', `${frac * 100}%`);
+    el.classList.toggle('dead', part.hp <= 0);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -469,11 +518,20 @@ function updateTank(t, dt) {
   if (t.dead) {
     t.respawn -= dt;
     if (t.respawn <= 0) placeTank(t, t.faction === 'boss');
+    if (t.isPlayer) reticle.visible = false;
     return;
   }
 
   const s = t.stats;
   let dir = new THREE.Vector3();
+
+  // Bully-onderdelen bepalen wat hij nog kan: rupsen = rijden, toren = richten/schieten.
+  let speedMul = 1, canAim = true;
+  if (t.parts) {
+    const ld = t.parts.trackL.hp <= 0, rd = t.parts.trackR.hp <= 0;
+    speedMul = (ld && rd) ? 0 : ((ld || rd) ? 0.4 : 1); // beide rupsen kapot = vast
+    canAim = t.parts.turret.hp > 0;
+  }
 
   if (t.isPlayer) {
     const inp = moveInput();
@@ -495,10 +553,12 @@ function updateTank(t, dt) {
       move.add(new THREE.Vector3(-toT.z, 0, toT.x).multiplyScalar(0.6));
       move.add(t.wander.clone().multiplyScalar(0.3));
       if (move.lengthSq() > 0.001) { move.normalize(); dir.copy(move); t.heading = lerpAngle(t.heading, Math.atan2(move.x, move.z), 0.12); }
-      // richten + schieten
-      t.turretYaw = yawTo(t.group.position, target.group.position);
-      t.fireTimer -= dt;
-      if (t.fireTimer <= 0 && dist < 60) { fire(t, t.turretYaw); t.fireTimer = s.cd * (0.85 + Math.random() * 0.4); }
+      // richten + schieten (alleen als de toren nog leeft)
+      if (canAim) {
+        t.turretYaw = yawTo(t.group.position, target.group.position);
+        t.fireTimer -= dt;
+        if (t.fireTimer <= 0 && dist < 60) { fire(t, t.turretYaw); t.fireTimer = s.cd * (0.85 + Math.random() * 0.4); }
+      }
     } else {
       dir.copy(t.wander);
       if (dir.lengthSq() > 0.001) t.heading = lerpAngle(t.heading, Math.atan2(dir.x, dir.z), 0.1);
@@ -506,9 +566,9 @@ function updateTank(t, dt) {
   }
 
   // beweging
-  if (dir.lengthSq() > 0.001) {
+  if (dir.lengthSq() > 0.001 && speedMul > 0) {
     dir.normalize();
-    t.group.position.addScaledVector(dir, s.speed * dt);
+    t.group.position.addScaledVector(dir, s.speed * speedMul * dt);
     clampArena(t.group.position);
   }
   const p = t.group.position;
@@ -521,9 +581,21 @@ function updateTank(t, dt) {
     if (aim.yaw !== null) {
       const target = applySoftLock(t.group.position, aim.yaw);
       t.turretYaw = lerpAngle(t.turretYaw, target, 0.35); // draaisnelheid turret
-    }
+    } else { lockTarget = null; }
     t.fireTimer -= dt;
     if (aim.fire && t.fireTimer <= 0) { fire(t, t.turretYaw); t.fireTimer = s.cd; }
+
+    // richtertje plaatsen: op het doel (rood) of vooruit langs de loop (wit)
+    reticle.visible = true;
+    if (lockTarget) {
+      reticle.position.copy(lockTarget.group.position); reticle.position.y += 3.2;
+      reticle.material.color.setHex(0xff5a5a); reticle.scale.set(3.6, 3.6, 1);
+    } else {
+      const ax = t.group.position.x + Math.sin(t.turretYaw) * 26;
+      const az = t.group.position.z + Math.cos(t.turretYaw) * 26;
+      reticle.position.set(ax, terrainHeight(ax, az) + 1.5, az);
+      reticle.material.color.setHex(0xffffff); reticle.scale.set(3, 3, 1);
+    }
   }
   // turret visueel richten (relatief t.o.v. de romp)
   t.turret.rotation.y = t.turretYaw - t.heading;
@@ -542,8 +614,9 @@ function updateProjectiles(dt) {
     for (const t of tanks) {
       if (t.dead || t.faction === pr.faction) continue;
       if (pr.mesh.position.distanceTo(t.group.position) < t.radius) {
-        t.hp -= pr.dmg; hit = true;
-        if (t.hp <= 0) onKill(t);
+        if (t.parts) damageBully(t, pr.mesh.position, pr.dmg);  // locational damage
+        else { t.hp -= pr.dmg; if (t.hp <= 0) onKill(t); }
+        hit = true;
         break;
       }
     }
@@ -552,6 +625,29 @@ function updateProjectiles(dt) {
     }
   }
 }
+
+// Schade naar het dichtstbijzijnde nog-levende onderdeel bij het inslagpunt.
+const _wp = new THREE.Vector3();
+function damageBully(t, point, dmg) {
+  let best = null, bd = Infinity;
+  for (const key in t.parts) {
+    const part = t.parts[key];
+    if (part.hp <= 0) continue;
+    part.meshes[0].getWorldPosition(_wp);
+    const d = _wp.distanceToSquared(point);
+    if (d < bd) { bd = d; best = key; }
+  }
+  if (!best) return;
+  const part = t.parts[best];
+  part.hp -= dmg;
+  if (part.hp <= 0) {
+    part.hp = 0;
+    for (const m of part.meshes) m.material.color.setHex(0x2b2e34); // verwoest -> donker
+    if (best === 'hull') onKill(t);
+    else toast(PART_LABELS[best] + ' vernield!', '#ffd27a');
+  }
+}
+const PART_LABELS = { hull: 'Romp', turret: 'Toren', trackL: 'Rups links', trackR: 'Rups rechts' };
 
 function onKill(t) {
   t.dead = true;
@@ -610,6 +706,17 @@ function newMap() {
 }
 document.getElementById('newmap').addEventListener('click', newMap);
 
+async function goFullscreen() {
+  try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); }
+  catch (e) { /* geweigerd / niet ondersteund */ }
+  try { if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); }
+  catch (e) { /* lock alleen mogelijk in fullscreen op sommige toestellen */ }
+}
+document.getElementById('fsbtn').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else goFullscreen();
+});
+
 function start() {
   const name = (input.value || '').trim() || 'speler';
   username = name.slice(0, 16);
@@ -619,6 +726,7 @@ function start() {
   document.getElementById('joystick').classList.remove('hidden');
   document.getElementById('aimstick').classList.remove('hidden');
   showSeed();
+  goFullscreen();   // fullscreen + landscape op de start-tap (user gesture)
   started = true;
 }
 startBtn.addEventListener('click', start);

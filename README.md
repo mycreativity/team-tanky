@@ -9,17 +9,17 @@ Een **client-only** single-player spike in Three.js — jij + AI-teamgenoten vs.
 Alles draait in de browser (game-AI = simpele state machine, geen server), dus het kan direct op GitHub Pages.
 
 **Wat werkt:**
-- Rijdende tank met omnidirectionele besturing
-- Gekantelde, vaste 3rd-person camera die de speler volgt
-- Terrein met hoogteverschil (gras / zand / water / rots)
-- Auto-lock richten + schieten
-- AI-teamgenoten en een AI-bully (benaderen, omcirkelen, schieten)
+- Rijdende tank, gekantelde vaste 3rd-person camera die de speler volgt
+- **Procedureel (seeded) terrein** met hoogteverschil (gras/zand/water/rots) + gestrooide bomen & rotsen; "🔀 Nieuwe map"-knop, `?seed=` reproduceerbaar
+- **Twin-stick besturing** met manuele aim + **klein richtvierkantje** en kleine soft-lock
+- **Locational damage op de bully**: Romp / Toren / Rups L / Rups R apart kapot (rupsen kapot = vast, toren kapot = kan niet richten, romp kapot = verslagen)
+- Grotere, tragere, harder rakende AI-bully + AI-teamgenoten
 - Health-bars, respawn, username-onboarding (localStorage)
-- Touch-joystick + vuurknop (mobiel) én toetsenbord (desktop)
+- **Landscape + fullscreen** (fullscreen-knop; landscape-hint in portrait)
 
 **Besturing:**
-- Desktop: `WASD` / pijltjes rijden · richten automatisch · vuurknop rechtsonder (of houd 'm ingedrukt)
-- Mobiel: joystick links, vuurknop rechts
+- Desktop: `WASD` / pijltjes rijden · muis richt de turret · muisknop schiet
+- Mobiel: links rijden, rechts richten & schieten (met kleine aim-assist)
 
 ## Lokaal draaien
 
@@ -53,6 +53,6 @@ GAME_DESIGN.md          # volledig game-ontwerp
 
 ## Volgende stappen
 
+- Dekking & camo koppelen aan het terrein (rotsen blokkeren schoten, bos verlaagt zichtbaarheid/lock)
 - Escalatie-mechaniek voor lange potjes (map krimpt / sudden death)
-- Locational damage (tracks / turret / hull apart) in de spike
 - Multiplayer (stap 2): realtime backend (PartyKit / Colyseus / eigen WS), client blijft op Pages
