@@ -18,6 +18,43 @@ const STATS = {
 };
 
 // ---------------------------------------------------------------------------
+// Procedurale wereld (gedeeltelijk): seed -> deterministische map.
+// Zelfde seed = zelfde map op elke client (belangrijk voor multiplayer-sync).
+// Authored grenzen (arena, spawnzone, biome-regels) houden het eerlijk.
+// ---------------------------------------------------------------------------
+const _params = new URLSearchParams(location.search);
+let SEED = _params.has('seed') ? (parseInt(_params.get('seed'), 10) >>> 0)
+                               : (Math.floor(Math.random() * 1e9) >>> 0);
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash2(ix, iz, seed) {
+  let h = Math.imul(ix | 0, 374761393) + Math.imul(iz | 0, 668265263) + Math.imul(seed | 0, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, z, seed) {
+  const x0 = Math.floor(x), z0 = Math.floor(z), fx = x - x0, fz = z - z0;
+  const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  const n00 = hash2(x0, z0, seed), n10 = hash2(x0 + 1, z0, seed);
+  const n01 = hash2(x0, z0 + 1, seed), n11 = hash2(x0 + 1, z0 + 1, seed);
+  const a = n00 + (n10 - n00) * sx, b = n01 + (n11 - n01) * sx;
+  return a + (b - a) * sz; // [0,1]
+}
+function fbm(x, z, seed) {
+  let amp = 1, freq = 1, sum = 0, norm = 0;
+  for (let o = 0; o < 4; o++) { sum += amp * vnoise(x * freq, z * freq, (seed + o * 1013) | 0); norm += amp; amp *= 0.5; freq *= 2; }
+  return sum / norm; // [0,1]
+}
+
+// ---------------------------------------------------------------------------
 // Renderer / scene / camera
 // ---------------------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -49,19 +86,23 @@ scene.add(sun);
 scene.add(sun.target);
 
 // ---------------------------------------------------------------------------
-// Terrein — analytische hoogte-functie zodat tanks exact op de grond staan
+// Terrein — procedureel uit de seed. Zelfde functie voor mesh én tank-hoogte,
+// zodat tanks exact op de grond staan.
 // ---------------------------------------------------------------------------
 function terrainHeight(x, z) {
-  return (
-    3.0 * Math.sin(x * 0.05) * Math.cos(z * 0.045) +   // brede glooiing
-    2.0 * Math.sin(x * 0.11 + 1.3) * Math.sin(z * 0.09 + 0.5) +
-    1.0 +                                              // lift (minder water)
-    5.5 * Math.exp(-(((x - 34) ** 2) + ((z + 26) ** 2)) / 700) +  // heuvel
-    4.5 * Math.exp(-(((x + 40) ** 2) + ((z - 30) ** 2)) / 900)    // heuvel 2
-  );
+  // brede glooiing (lage frequentie) + wat detail
+  let h = (fbm(x * 0.012, z * 0.012, SEED) - 0.5) * 20;
+  h += (fbm(x * 0.05, z * 0.05, (SEED + 7) | 0) - 0.5) * 4;
+  // authored: rand van de arena iets omhoog -> natuurlijke 'kom' die spelers binnenhoudt
+  const r = Math.hypot(x, z);
+  if (r > ARENA) h += (r - ARENA) * 0.25;
+  return h;
 }
 
-function buildTerrain() {
+let terrainMesh = null;
+let featureGroup = null;
+
+function buildTerrainMesh() {
   const size = 260, seg = 120, step = size / seg, half = size / 2;
   const geo = new THREE.BufferGeometry();
   const positions = [], colors = [], indices = [];
@@ -70,6 +111,7 @@ function buildTerrain() {
   const cRock  = new THREE.Color(0x9095a0);
   const cWater = new THREE.Color(0x2e86a8);
   const tmp = new THREE.Color();
+  const cr = mulberry32((SEED ^ 0x1234) >>> 0);
 
   for (let i = 0; i <= seg; i++) {
     for (let j = 0; j <= seg; j++) {
@@ -77,12 +119,12 @@ function buildTerrain() {
       const z = -half + j * step;
       const y = terrainHeight(x, z);
       positions.push(x, y, z);
-      // kleur per hoogte -> hint naar water / gras / zand / rots
-      if (y < -1.5) tmp.copy(cWater);
-      else if (y < 3.0) tmp.copy(cGrass);
-      else if (y < 6.0) tmp.copy(cSand);
+      // kleur per hoogte -> water / gras / zand / rots
+      if (y < -3.5) tmp.copy(cWater);
+      else if (y < 2.5) tmp.copy(cGrass);
+      else if (y < 6.5) tmp.copy(cSand);
       else tmp.copy(cRock);
-      tmp.offsetHSL(0, 0, (Math.random() - 0.5) * 0.04); // lichte ruis
+      tmp.offsetHSL(0, 0, (cr() - 0.5) * 0.04);
       colors.push(tmp.r, tmp.g, tmp.b);
     }
   }
@@ -98,12 +140,74 @@ function buildTerrain() {
   geo.setIndex(indices);
   geo.computeVertexNormals();
 
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0.0, flatShading: false });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.receiveShadow = true;
-  scene.add(mesh);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0.0 });
+  terrainMesh = new THREE.Mesh(geo, mat);
+  terrainMesh.receiveShadow = true;
+  scene.add(terrainMesh);
 }
-buildTerrain();
+
+// Procedureel strooien: bomen (bos/camo) op gras, rotsen (dekking) op hoogte.
+// Rule-based binnen authored grenzen: buiten spawn-buffer en niet in het water.
+function scatterFeatures() {
+  const rand = mulberry32((SEED ^ 0x9e3779b9) >>> 0);
+  featureGroup = new THREE.Group();
+  const trees = [], rocks = [];
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), S = new THREE.Vector3();
+
+  for (let n = 0; n < 900; n++) {
+    const x = (rand() - 0.5) * 2 * (ARENA - 4);
+    const z = (rand() - 0.5) * 2 * (ARENA - 4);
+    if (Math.hypot(x, z) < 12) continue;          // bully-spawn vrij
+    const y = terrainHeight(x, z);
+    if (y < -2.5) continue;                        // geen bomen/rots in water
+    if (y < 2.5 && rand() < 0.55) trees.push([x, y, z, 0.7 + rand() * 0.9, rand() * 6.28]);
+    else if (y >= 4.0 && rand() < 0.7) rocks.push([x, y, z, 0.7 + rand() * 1.4, rand() * 6.28]);
+  }
+
+  if (trees.length) {
+    const trunkGeo = new THREE.CylinderGeometry(0.22, 0.3, 1.6, 6);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5b4326, roughness: 1 });
+    const canopyGeo = new THREE.ConeGeometry(1.5, 3.2, 7);
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0x2f6d3a, roughness: 1 });
+    const trunkIM = new THREE.InstancedMesh(trunkGeo, trunkMat, trees.length);
+    const canopyIM = new THREE.InstancedMesh(canopyGeo, canopyMat, trees.length);
+    canopyIM.castShadow = true;
+    trees.forEach((t, i) => {
+      const [x, y, z, s, rot] = t;
+      Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+      P.set(x, y + 0.8 * s, z); S.set(s, s, s); M.compose(P, Q, S); trunkIM.setMatrixAt(i, M);
+      P.set(x, y + 2.4 * s, z); M.compose(P, Q, S); canopyIM.setMatrixAt(i, M);
+    });
+    trunkIM.instanceMatrix.needsUpdate = true; canopyIM.instanceMatrix.needsUpdate = true;
+    featureGroup.add(trunkIM, canopyIM);
+  }
+
+  if (rocks.length) {
+    const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+    const rockMat = new THREE.MeshStandardMaterial({ color: 0x81858f, roughness: 0.9, flatShading: true });
+    const rockIM = new THREE.InstancedMesh(rockGeo, rockMat, rocks.length);
+    rockIM.castShadow = true; rockIM.receiveShadow = true;
+    rocks.forEach((r, i) => {
+      const [x, y, z, s, rot] = r;
+      Q.setFromAxisAngle(new THREE.Vector3(0.2, 1, 0.1).normalize(), rot);
+      P.set(x, y + 0.5 * s, z); S.set(s, s * 0.8, s); M.compose(P, Q, S); rockIM.setMatrixAt(i, M);
+    });
+    rockIM.instanceMatrix.needsUpdate = true;
+    featureGroup.add(rockIM);
+  }
+  scene.add(featureGroup);
+}
+
+function generateWorld() {
+  if (terrainMesh) { scene.remove(terrainMesh); terrainMesh.geometry.dispose(); terrainMesh.material.dispose(); }
+  if (featureGroup) {
+    scene.remove(featureGroup);
+    featureGroup.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  }
+  buildTerrainMesh();
+  scatterFeatures();
+}
+generateWorld();
 
 // ---------------------------------------------------------------------------
 // Tank-fabriek (opgebouwd uit primitives)
@@ -439,6 +543,18 @@ const startBtn = document.getElementById('start');
 const saved = localStorage.getItem('tt_username');
 if (saved) input.value = saved;
 
+const seedLabel = document.getElementById('seedlabel');
+function showSeed() { seedLabel.textContent = 'seed ' + SEED; }
+
+function newMap() {
+  SEED = Math.floor(Math.random() * 1e9) >>> 0;
+  const u = new URL(location.href); u.searchParams.set('seed', SEED); history.replaceState(null, '', u);
+  generateWorld();
+  for (const t of tanks) placeTank(t, t.faction === 'boss');
+  showSeed();
+}
+document.getElementById('newmap').addEventListener('click', newMap);
+
 function start() {
   const name = (input.value || '').trim() || 'speler';
   username = name.slice(0, 16);
@@ -447,6 +563,7 @@ function start() {
   document.getElementById('hud').classList.remove('hidden');
   joyEl.classList.remove('hidden');
   fireEl.classList.remove('hidden');
+  showSeed();
   started = true;
 }
 startBtn.addEventListener('click', start);

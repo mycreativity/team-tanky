@@ -73,6 +73,14 @@ Elk terrein heeft een eigen rol voor stealth/mobiliteit:
 - **Stedelijk**: gebouwen = line-of-sight-blokkers, hoeken, hinderlagen, krap.
 - **Bergen**: hoogteverschil (zie Hoogte).
 
+## Procedurale maps (gedeeltelijk)
+Maps zijn **procedureel maar begrensd** — niet volledig willekeurig (dat breekt PvP-balans).
+- **Seed-gebaseerd & deterministisch**: elke map komt uit één seed. Multiplayer stuurt alleen de **seed** → elke client genereert exact dezelfde wereld (geen zware geometrie-sync).
+- **Procedureel binnen authored grenzen**: generator vult hoogte (fBm-noise), biomes en begroeiing; regels bewaken vaste arena-grenzen, veilige spawnzones en een gegarandeerde mix van dekking/camo/hoogte.
+- **Features rule-based gestrooid**: bomen (bos/camo) op gras, rotsen (dekking) op hoogte, buiten spawn-buffer en water.
+- **Meta-bonus**: elke map anders → camo-keuze-per-potje blijft elke match vers.
+- *Prototype-status*: geïmplementeerd in de spike (seeded fBm-terrein + gestrooide bomen/rotsen + "nieuwe map"-knop; `?seed=` in de URL is reproduceerbaar). Collision/LOS voor dekking & camo-effect nog te koppelen.
+
 ## Hoogteverschil
 - Tanks kunnen wat **hoger/lager** rijden.
 - **Hoog terrein** = schietvoordeel + **lastiger te locken/raken**.
