@@ -108,6 +108,16 @@ Gebouwd rond het lock-on/visibility-systeem, geoptimaliseerd voor 10–15 jaar o
 - **Revive**: rij naar wrak → "hou vast"-knop → je staat stil (= het risico).
 - **Bully-uitzondering**: zelfde basis, maar z'n **zware wapen richt hij handmatig** (sleep-mik) → echte skill-shot met trage herlaad. Toegankelijk om te pikken, hoog skill-ceiling.
 
+## Onboarding (prototype)
+- Wie de URL opent en nog **geen sessie** heeft, maakt een **username** aan. Laagdrempelig: geen accounts/wachtwoorden in prototype-fase.
+- Client-only fase: username in **localStorage** (geen backend). Zodra multiplayer erbij komt moet de server de username kennen.
+
+## Hosting / tech-prototype
+- **GitHub Pages = statisch only** → kan de Three.js **client** hosten, **niet** een multiplayer-server.
+- **Stap 1 (nu)**: client-only spike op Pages — één tank rijden/richten/schieten + evt. AI-bully (client-side). Test besturing & camera zonder backend.
+- **Stap 2 (later)**: multiplayer via lichte realtime-host (PartyKit / Colyseus / eigen WS op Fly.io/Render); client blijft op Pages.
+- **Let op**: private repo + Pages vereist meestal een betaald plan; voor prototype repo evt. **publiek** maken.
+
 ## Tech / constraints
 - Three.js, mobiele browser, touch-besturing.
 - Gekantelde 3rd-person camera lost hoogte-leesbaarheid op (geen plat top-down probleem meer).
@@ -115,5 +125,6 @@ Gebouwd rond het lock-on/visibility-systeem, geoptimaliseerd voor 10–15 jaar o
 
 ## Open vragen
 - [ ] **Escalatie-mechaniek** om spanning over 10–15 min vast te houden (map krimpt / gevaren groeien / sudden death) — uitwerken.
+- [ ] **Multiplayer-backend** keuze (PartyKit / Colyseus / eigen WS) — voor stap 2.
 - [ ] **Retentie/meta**: ladder, seizoenen (camo-unlock is er al)?
 - [ ] **Patstelling-rem** definitief (execute + klok voldoende?).
