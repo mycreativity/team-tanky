@@ -23,7 +23,7 @@
       <label for="username">Kies een username</label>
       <input id="username" maxlength="16" autocomplete="off" placeholder="bijv. Jasper" />
       <button id="start">Spelen</button>
-      <p class="hint">Desktop: WASD rijden · richten gaat automatisch · spatie of vuurknop schiet.<br/>Mobiel: joystick links, vuurknop rechts.</p>
+      <p class="hint">Desktop: WASD rijden · muis richt de turret · muisknop schiet.<br/>Mobiel: links rijden, rechts richten &amp; schieten (kleine aim-assist).</p>
     </div>
   </div>
 
@@ -40,9 +40,9 @@
     <div id="toast"></div>
   </div>
 
-  <!-- Touch controls -->
+  <!-- Touch controls: links rijden, rechts richten + schieten -->
   <div id="joystick" class="hidden"><div id="joystick-knob"></div></div>
-  <div id="firebtn" class="hidden">VUUR</div>
+  <div id="aimstick" class="hidden"><div id="aimstick-knob"></div></div>
 
   <script type="module" src="./src/main.js"></script>
 </body>

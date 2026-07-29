@@ -88,26 +88,20 @@ canvas { display: block; }
 #toast.show { opacity: 1; }
 
 /* ---- Touch controls ---- */
-#joystick {
+#joystick, #aimstick {
   position: fixed; z-index: 20; width: 128px; height: 128px; border-radius: 50%;
   background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.15);
-  left: 26px; bottom: 60px; touch-action: none;
+  bottom: 60px; touch-action: none;
 }
-#joystick-knob {
+#joystick { left: 26px; }
+#aimstick { right: 26px; }
+#joystick-knob, #aimstick-knob {
   position: absolute; width: 58px; height: 58px; border-radius: 50%;
-  left: 35px; top: 35px; background: rgba(46,196,255,0.55);
-  border: 2px solid rgba(255,255,255,0.4);
+  left: 35px; top: 35px; border: 2px solid rgba(255,255,255,0.4);
 }
-#firebtn {
-  position: fixed; z-index: 20; right: 34px; bottom: 78px;
-  width: 96px; height: 96px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 16px; letter-spacing: 1px; color: #4a0000;
-  background: radial-gradient(circle at 35% 30%, #ff8080, var(--bully));
-  border: 3px solid rgba(255,255,255,0.35); touch-action: none;
-}
-#firebtn:active { transform: scale(0.94); }
+#joystick-knob { background: rgba(46,196,255,0.55); }
+#aimstick-knob { background: rgba(255,90,90,0.6); }
 
 @media (min-width: 900px) and (pointer: fine) {
-  #joystick, #firebtn { opacity: 0.35; }
+  #joystick, #aimstick { opacity: 0.3; }
 }

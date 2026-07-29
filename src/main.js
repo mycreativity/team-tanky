@@ -12,10 +12,13 @@ const CAM_OFFSET = new THREE.Vector3(0, 26, 18); // vaste, gekantelde hoge hoek
 const GRAV_HOVER = 1.6;       // hoe hoog de tank boven het terrein 'zweeft'
 
 const STATS = {
-  player: { hp: 100, speed: 27, cd: 0.38, pspeed: 78, dmg: 6,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x2ec4ff },
-  ally:   { hp: 100, speed: 24, cd: 0.75, pspeed: 72, dmg: 5,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x36e0a0 },
-  bully:  { hp: 640, speed: 13, cd: 1.7,  pspeed: 58, dmg: 22, pradius: 0.7,  scale: 2.2, radius: 4.6, color: 0xff4d4d },
+  player: { hp: 100, speed: 17, cd: 0.38, pspeed: 78, dmg: 6,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x2ec4ff },
+  ally:   { hp: 100, speed: 15, cd: 0.75, pspeed: 72, dmg: 5,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x36e0a0 },
+  bully:  { hp: 640, speed: 9,  cd: 1.7,  pspeed: 58, dmg: 22, pradius: 0.7,  scale: 2.2, radius: 4.6, color: 0xff4d4d },
 };
+const SOFT_LOCK_CONE = 0.22; // rad (~13°): kleine aim-assist als je richting in de buurt van een target komt
+const SOFT_LOCK_RANGE = 75;
+const SOFT_LOCK_PULL = 0.5;  // hoe sterk de assist naar het doel trekt (0 = geen, 1 = volledige lock)
 
 // ---------------------------------------------------------------------------
 // Procedurale wereld (gedeeltelijk): seed -> deterministische map.
@@ -318,37 +321,52 @@ function fire(t, targetYaw) {
 }
 
 // ---------------------------------------------------------------------------
-// Input (keyboard + touch joystick + fire button)
+// Input — TWIN-STICK: links rijden, rechts turret richten (+ schieten).
+// Desktop: WASD rijden, muis richt de turret, muisknop schiet.
 // ---------------------------------------------------------------------------
 const keys = {};
 addEventListener('keydown', (e) => { keys[e.code] = true; });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-let joyVec = { x: 0, y: 0 }, joyId = null;
-let firing = false;
-const joyEl = document.getElementById('joystick');
-const knobEl = document.getElementById('joystick-knob');
-const fireEl = document.getElementById('firebtn');
-
-function joyStart(e) { joyId = e.pointerId; joyEl.setPointerCapture(e.pointerId); joyMove(e); }
-function joyMove(e) {
-  if (e.pointerId !== joyId) return;
-  const r = joyEl.getBoundingClientRect();
-  let dx = e.clientX - (r.left + r.width / 2);
-  let dy = e.clientY - (r.top + r.height / 2);
-  const max = r.width / 2, len = Math.hypot(dx, dy);
-  if (len > max) { dx = dx / len * max; dy = dy / len * max; }
-  knobEl.style.transform = `translate(${dx}px, ${dy}px)`;
-  joyVec.x = dx / max; joyVec.y = dy / max;
+// Generieke touch-joystick binder
+function bindStick(el, knob) {
+  const state = { x: 0, y: 0, active: false, id: null };
+  const move = (e) => {
+    if (e.pointerId !== state.id) return;
+    const r = el.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const max = r.width / 2, len = Math.hypot(dx, dy);
+    if (len > max) { dx = dx / len * max; dy = dy / len * max; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    state.x = dx / max; state.y = dy / max; state.active = true;
+  };
+  const end = (e) => {
+    if (e.pointerId !== state.id) return;
+    state.id = null; state.x = 0; state.y = 0; state.active = false;
+    knob.style.transform = 'translate(0,0)';
+  };
+  el.addEventListener('pointerdown', (e) => { state.id = e.pointerId; el.setPointerCapture(e.pointerId); move(e); });
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  return state;
 }
-function joyEnd(e) { if (e.pointerId !== joyId) return; joyId = null; joyVec.x = 0; joyVec.y = 0; knobEl.style.transform = 'translate(0,0)'; }
-joyEl.addEventListener('pointerdown', joyStart);
-joyEl.addEventListener('pointermove', joyMove);
-joyEl.addEventListener('pointerup', joyEnd);
-joyEl.addEventListener('pointercancel', joyEnd);
-fireEl.addEventListener('pointerdown', (e) => { e.preventDefault(); firing = true; });
-fireEl.addEventListener('pointerup', () => { firing = false; });
-fireEl.addEventListener('pointercancel', () => { firing = false; });
+const leftStick = bindStick(document.getElementById('joystick'), document.getElementById('joystick-knob'));
+const rightStick = bindStick(document.getElementById('aimstick'), document.getElementById('aimstick-knob'));
+
+// Desktop muis-aim: raycast naar een grondvlak op spelerhoogte
+const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const aimRay = new THREE.Raycaster();
+const mouseNDC = new THREE.Vector2();
+let mouseAimActive = false, mouseDown = false;
+renderer.domElement.addEventListener('mousemove', (e) => {
+  mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  mouseAimActive = true;
+});
+renderer.domElement.addEventListener('mousedown', () => { mouseDown = true; });
+addEventListener('mouseup', () => { mouseDown = false; });
 
 function moveInput() {
   let x = 0, z = 0;
@@ -356,10 +374,26 @@ function moveInput() {
   if (keys['KeyS'] || keys['ArrowDown']) z += 1;
   if (keys['KeyA'] || keys['ArrowLeft']) x -= 1;
   if (keys['KeyD'] || keys['ArrowRight']) x += 1;
-  x += joyVec.x; z += joyVec.y;
+  x += leftStick.x; z += leftStick.y;
   const len = Math.hypot(x, z);
   if (len > 1) { x /= len; z /= len; }
   return { x, z, len: Math.min(len, 1) };
+}
+
+// Bepaalt richt-yaw (of null) + of er gevuurd wordt, uit rechter stick of muis.
+function aimInput() {
+  if (Math.hypot(rightStick.x, rightStick.y) > 0.25) {
+    return { yaw: Math.atan2(rightStick.x, rightStick.y), fire: true };
+  }
+  if (mouseAimActive) {
+    aimPlane.constant = -player.group.position.y;
+    aimRay.setFromCamera(mouseNDC, camera);
+    const hit = new THREE.Vector3();
+    if (aimRay.ray.intersectPlane(aimPlane, hit)) {
+      return { yaw: Math.atan2(hit.x - player.group.position.x, hit.z - player.group.position.z), fire: mouseDown };
+    }
+  }
+  return { yaw: null, fire: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -381,9 +415,23 @@ function yawTo(from, to) {
   return Math.atan2(to.x - from.x, to.z - from.z);
 }
 function lerpAngle(a, b, t) {
+  return a + angleDelta(a, b) * t;
+}
+function angleDelta(a, b) {
   let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (d < -Math.PI) d += Math.PI * 2;
-  return a + d * t;
+  return d;
+}
+// Kleine aim-assist: als de richt-yaw binnen een kegel van een vijand valt, trek 'm er een beetje naartoe.
+function applySoftLock(from, yaw) {
+  let best = null, bestAbs = SOFT_LOCK_CONE;
+  for (const e of aliveTargetsFor(player)) {
+    if (from.distanceTo(e.group.position) > SOFT_LOCK_RANGE) continue;
+    const d = Math.abs(angleDelta(yaw, yawTo(from, e.group.position)));
+    if (d < bestAbs) { bestAbs = d; best = e; }
+  }
+  if (best) return lerpAngle(yaw, yawTo(from, best.group.position), SOFT_LOCK_PULL);
+  return yaw;
 }
 function clampArena(v) {
   v.x = Math.max(-ARENA, Math.min(ARENA, v.x));
@@ -467,12 +515,15 @@ function updateTank(t, dt) {
   p.y = terrainHeight(p.x, p.z) + GRAV_HOVER * s.scale;
   t.group.rotation.y = t.heading;
 
-  // speler-turret: auto-lock op dichtstbijzijnde vijand
+  // speler-turret: MANUEEL richten (twin-stick / muis) + kleine soft-lock
   if (t.isPlayer) {
-    const tgt = nearest(t, aliveTargetsFor(t));
-    if (tgt) t.turretYaw = yawTo(t.group.position, tgt.group.position);
+    const aim = aimInput();
+    if (aim.yaw !== null) {
+      const target = applySoftLock(t.group.position, aim.yaw);
+      t.turretYaw = lerpAngle(t.turretYaw, target, 0.35); // draaisnelheid turret
+    }
     t.fireTimer -= dt;
-    if (firing && tgt && t.fireTimer <= 0) { fire(t, t.turretYaw); t.fireTimer = s.cd; }
+    if (aim.fire && t.fireTimer <= 0) { fire(t, t.turretYaw); t.fireTimer = s.cd; }
   }
   // turret visueel richten (relatief t.o.v. de romp)
   t.turret.rotation.y = t.turretYaw - t.heading;
@@ -524,10 +575,14 @@ function animate() {
     updateHUD();
     if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) toastEl.classList.remove('show'); }
   }
-  // vaste, gekantelde camera die de speler volgt (geen meedraaien)
-  const target = player.dead ? player.group.position : player.group.position;
+  // vaste, gekantelde camera die de speler volgt (hoek blijft vast, geen meedraaien).
+  // Subtiele look-ahead richting de aim, zodat je iets meer ziet waar je op richt.
+  const target = player.group.position;
+  const lead = 6;
+  const lx = target.x + Math.sin(player.turretYaw) * lead;
+  const lz = target.z + Math.cos(player.turretYaw) * lead;
   camera.position.set(target.x + CAM_OFFSET.x, target.y + CAM_OFFSET.y, target.z + CAM_OFFSET.z);
-  camera.lookAt(target.x, target.y + 2, target.z);
+  camera.lookAt(lx, target.y + 2, lz);
   sun.target.position.copy(target); // schaduw meebewegen
   sun.position.set(target.x + 60, 90, target.z + 40);
   renderer.render(scene, camera);
@@ -561,8 +616,8 @@ function start() {
   localStorage.setItem('tt_username', username);
   overlay.classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
-  joyEl.classList.remove('hidden');
-  fireEl.classList.remove('hidden');
+  document.getElementById('joystick').classList.remove('hidden');
+  document.getElementById('aimstick').classList.remove('hidden');
   showSeed();
   started = true;
 }

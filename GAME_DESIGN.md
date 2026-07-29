@@ -11,7 +11,7 @@ Een asymmetrische 3D tank-arena voor mobiel: een team kleine tanks vecht samen t
 - **Potjeduur**: **10–15 min**, bewust met diepgang & spanning → vraagt om **escalatie** (map krimpt / gevarenzones groeien / sudden death) om de spanning over de hele duur vast te houden.
 - Platform: **browser op mobiel first**, later native mobile als het aanslaat.
 - Engine: **Three.js**.
-- Doelgroep: **kinderen 10–15**.
+- Doelgroep: **13 jaar en ouder**.
 - Tone: oorlog / dark, maar **speels**.
 - Camera: **3rd person, hoge hoek, behoorlijk uitgezoomd** voor overzicht (camera volgt speler, map scrollt, Brawl-Stars-achtig maar gekanteld i.p.v. plat top-down). Speelveld **iets groter** dan Brawl Stars. De gekantelde hoek toont hoogteverschil vanzelf (lost leesbaarheid op). **Vaste camerahoek** (geen meedraaien). **Dynamische zoom** (uit voor overzicht, in tijdens gevecht) + **damage-state iconen** boven tanks (track kapot / turret weg).
 
@@ -107,14 +107,17 @@ Diepte zit in **beslissingen die iets kosten**, niet in meer knoppen:
 - Tijdelijke **tanksporen** blijven zichtbaar (leesbaarheid slagveld).
 - Interactieve maps.
 
-## Besturing (touch)
-Gebouwd rond het lock-on/visibility-systeem, geoptimaliseerd voor 10–15 jaar op mobiel:
-- **Linkerduim = rij-joystick, omnidirectioneel** (à la Brawl Stars). Werkt met de vaste camera: stick omhoog = altijd "noord". Turret richt apart & automatisch mee.
-- **Auto-lock** pakt het beste doel; **lock-tijd = visibility-systeem** (verborgen vijand = trage/geen lock). Tap op andere vijand = wissel doel. (Geen handmatige twin-stick voor het team.)
-- **Rechterduim**: grote **Vuur**-knop + kleinere **Sub** (met laadmeter) + **Ability**-knop (defense/revive-upgrade).
-- **Locational damage via POSITIE, niet mikken**: auto-target raakt het onderdeel dat naar je toe staat. Wil je de tracks? → **flankeren** tot je ze ziet. Skill = positioneren, niet duim-precisie. Klikt met armour-angling.
+## Besturing (touch) — TWIN-STICK
+Manuele aim voor meer skill-expressie (doelgroep 13+):
+- **Linkerduim = rij-joystick, omnidirectioneel** (à la Brawl Stars). Werkt met de vaste camera: stick omhoog = altijd "noord".
+- **Rechterduim = richt-joystick**: draait de **turret handmatig** en **schiet** terwijl je richt. Géén auto-aim.
+- **Kleine soft-lock**: kom je met je richting dicht bij een target, dan trekt het vizier er een beetje naartoe (aim-assist, geen volledige lock). Op mobiel haalbaar, beloont goed mikken.
+- **Camera**: vaste hoek, maar met subtiele **look-ahead** richting je aim (je ziet iets meer waar je op richt).
+- **Tanks rijden bewust langzamer** → meer positioneel, minder twitchy.
+- **Desktop**: WASD rijden · muis richt de turret · muisknop schiet.
+- **Locational damage via POSITIE + mikken**: je richt zelf, maar om een specifiek onderdeel (track/turret) te raken moet je ook **flankeren** tot het in zicht komt. Skill = mikken én positioneren. Klikt met armour-angling.
 - **Revive**: rij naar wrak → "hou vast"-knop → je staat stil (= het risico).
-- **Bully-uitzondering**: zelfde basis, maar z'n **zware wapen richt hij handmatig** (sleep-mik) → echte skill-shot met trage herlaad. Toegankelijk om te pikken, hoog skill-ceiling.
+- **Bully**: zwaar wapen richt hij ook handmatig (skill-shot, trage herlaad).
 
 ## Onboarding (prototype)
 - Wie de URL opent en nog **geen sessie** heeft, maakt een **username** aan. Laagdrempelig: geen accounts/wachtwoorden in prototype-fase.
