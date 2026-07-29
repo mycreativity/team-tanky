@@ -7,6 +7,8 @@ Een asymmetrische 3D tank-arena voor mobiel: een team kleine tanks vecht samen t
 
 ## Kernconcept
 - **Asymmetrisch, 1-vs-veel** ("boss battle"): 1 bully vs. een team kleine tanks.
+- **Spelersaantal**: max **8** (1 bully + tot 7 team); AI vult aan bij tekort.
+- **Potjeduur**: **10–15 min**, bewust met diepgang & spanning → vraagt om **escalatie** (map krimpt / gevarenzones groeien / sudden death) om de spanning over de hele duur vast te houden.
 - Platform: **browser op mobiel first**, later native mobile als het aanslaat.
 - Engine: **Three.js**.
 - Doelgroep: **kinderen 10–15**.
@@ -97,14 +99,21 @@ Diepte zit in **beslissingen die iets kosten**, niet in meer knoppen:
 - Tijdelijke **tanksporen** blijven zichtbaar (leesbaarheid slagveld).
 - Interactieve maps.
 
+## Besturing (touch)
+Gebouwd rond het lock-on/visibility-systeem, geoptimaliseerd voor 10–15 jaar op mobiel:
+- **Linkerduim = rij-joystick, omnidirectioneel** (à la Brawl Stars). Werkt met de vaste camera: stick omhoog = altijd "noord". Turret richt apart & automatisch mee.
+- **Auto-lock** pakt het beste doel; **lock-tijd = visibility-systeem** (verborgen vijand = trage/geen lock). Tap op andere vijand = wissel doel. (Geen handmatige twin-stick voor het team.)
+- **Rechterduim**: grote **Vuur**-knop + kleinere **Sub** (met laadmeter) + **Ability**-knop (defense/revive-upgrade).
+- **Locational damage via POSITIE, niet mikken**: auto-target raakt het onderdeel dat naar je toe staat. Wil je de tracks? → **flankeren** tot je ze ziet. Skill = positioneren, niet duim-precisie. Klikt met armour-angling.
+- **Revive**: rij naar wrak → "hou vast"-knop → je staat stil (= het risico).
+- **Bully-uitzondering**: zelfde basis, maar z'n **zware wapen richt hij handmatig** (sleep-mik) → echte skill-shot met trage herlaad. Toegankelijk om te pikken, hoog skill-ceiling.
+
 ## Tech / constraints
 - Three.js, mobiele browser, touch-besturing.
-- **Besturing** nog open (twin-stick? auto-aim + onderdeelkeuze? oplichtende zwakke plekken?).
-- **Hoogte leesbaar maken** op top-down mobiel scherm = uitdaging (schaduw/contour/tint).
+- Gekantelde 3rd-person camera lost hoogte-leesbaarheid op (geen plat top-down probleem meer).
+- **Uitgezoomd overzicht vs. kleine tanks** → leunt op damage-state iconen boven tanks i.p.v. 3D-detail.
 
 ## Open vragen
-- [ ] **Spelersaantal**: 1 bully vs. hoeveel (4? 6? 8?)? Interacteert met mapgrootte.
-- [ ] **Potjeduur**: ~3–5 min?
-- [ ] **Besturingsschema** op touch.
+- [ ] **Escalatie-mechaniek** om spanning over 10–15 min vast te houden (map krimpt / gevaren groeien / sudden death) — uitwerken.
 - [ ] **Retentie/meta**: ladder, seizoenen (camo-unlock is er al)?
 - [ ] **Patstelling-rem** definitief (execute + klok voldoende?).
