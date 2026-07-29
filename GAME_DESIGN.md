@@ -94,6 +94,7 @@ Diepte zit in **beslissingen die iets kosten**, niet in meer knoppen:
    - **Speler-combo's = ruimtelijk & automatisch** (geen combo-knoppen): Scout spot zwakke plek → licht op voor hele team; reviven binnen Medic-shield = beschermd; Bruiser trekt aandacht → bully toont zwakke kant aan Sniper. Diepte via plek & timing, niet knoppenkennis.
 3. **Schieten verraadt je** → ritme van verbergen → hinderlaag → verplaatsen. Baiten mogelijk (één lokt, rest flankt).
 4. **Bully skill-ceiling**: zware schot timen, team naar lava/open terrein drijven, executen-vs-jagen, onderdelen beschermen.
+5. **Vuur-model (geen "altijd raak")**: AI leidt z'n doel voor (lead) en heeft **spreiding die groeit met doelsnelheid, afstand en eigen beweging** → stil staan = makkelijk te raken, blijven bewegen = ontwijken. De **bully is artillerie**: z'n granaat heeft **splash** (near-misses tellen) → het team moet **spreiden** i.p.v. in een kringetje om de bully te rijden.
 
 ## Progressie / retentie
 - **Camo-unlocks** (horizontaal, cosmetisch) naarmate je beter wordt = status-haak.

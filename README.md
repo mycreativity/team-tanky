@@ -15,6 +15,7 @@ Alles draait in de browser (game-AI = simpele state machine, geen server), dus h
 - **Locational damage op de bully**: Romp / Toren / Rups L / Rups R apart kapot (rupsen kapot = vast, toren kapot = kan niet richten, romp kapot = verslagen)
 - **Dekking & camo**: rotsen blokkeren schoten; stil in een bos-grove = **verborgen** (bully negeert je, geen soft-lock, half-transparant)
 - Grotere, tragere, harder rakende AI-bully + AI-teamgenoten
+- Vuur-model met **lead-voorspelling + spreiding** (sneller/verder doel = minder raak) en **splash-granaat** voor de bully (spreiden loont, geen "altijd raak")
 - Health-bars, respawn, username-onboarding (localStorage)
 - **Landscape + fullscreen** (fullscreen-knop; landscape-hint in portrait)
 

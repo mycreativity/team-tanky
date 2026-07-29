@@ -14,7 +14,7 @@ const GRAV_HOVER = 1.6;       // hoe hoog de tank boven het terrein 'zweeft'
 const STATS = {
   player: { hp: 100, speed: 17, cd: 0.38, pspeed: 78, dmg: 6,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x2ec4ff },
   ally:   { hp: 100, speed: 15, cd: 0.75, pspeed: 72, dmg: 5,  pradius: 0.35, scale: 1.0, radius: 2.4, color: 0x36e0a0 },
-  bully:  { hp: 640, speed: 7,  cd: 1.6,  pspeed: 58, dmg: 34, pradius: 0.8,  scale: 2.2, radius: 4.6, color: 0xff4d4d },
+  bully:  { hp: 640, speed: 7,  cd: 1.35, pspeed: 68, dmg: 34, pradius: 0.8,  scale: 2.2, radius: 4.6, color: 0xff4d4d },
 };
 const SOFT_LOCK_CONE = 0.22; // rad (~13°): kleine aim-assist als je richting in de buurt van een target komt
 const SOFT_LOCK_RANGE = 75;
@@ -306,7 +306,7 @@ function spawnTank(kind, faction, isPlayer = false) {
     heading: 0, turretYaw: 0,
     fireTimer: 0, dead: false, respawn: 0,
     wander: new THREE.Vector3(), wanderT: 0,
-    hidden: false, speedNow: 0,
+    hidden: false, speedNow: 0, vel: { x: 0, z: 0 },
     bar,
   };
   // Bully: locational damage — losse onderdelen met eigen HP.
@@ -362,11 +362,17 @@ function makeReticle() {
 }
 const reticle = makeReticle();
 
+// Dev-hook (alleen met ?debug=1): stelt de tanks bloot voor inspectie/tuning.
+if (new URLSearchParams(location.search).has('debug')) window.__tanks = tanks;
+
 // ---------------------------------------------------------------------------
 // Projectiles
 // ---------------------------------------------------------------------------
 const projectiles = [];
+const effects = [];
+const BULLY_SPLASH = 8; // de bully = artillerie: granaat met explosieradius
 const projGeo = new THREE.SphereGeometry(1, 8, 8);
+const boomGeo = new THREE.SphereGeometry(1, 14, 14);
 const projMatTeam = new THREE.MeshBasicMaterial({ color: 0xbfefff });
 const projMatBoss = new THREE.MeshBasicMaterial({ color: 0xffb0b0 });
 
@@ -380,7 +386,34 @@ function fire(t, targetYaw) {
   mesh.scale.setScalar(s.pradius);
   mesh.position.copy(origin);
   scene.add(mesh);
-  projectiles.push({ mesh, vel: dir.multiplyScalar(s.pspeed), life: 2.6, dmg: s.dmg, faction: t.faction });
+  const splash = t.faction === 'boss' ? BULLY_SPLASH : 0;
+  projectiles.push({ mesh, vel: dir.multiplyScalar(s.pspeed), life: 2.6, dmg: s.dmg, faction: t.faction, splash });
+}
+
+// Schade toepassen op een tank (bully via onderdelen, rest via hp).
+function applyDamage(t, point, dmg) {
+  if (t.parts) damageBully(t, point, dmg);
+  else { t.hp -= dmg; if (t.hp <= 0) onKill(t); }
+}
+// Explosie met falloff: alles binnen de radius krijgt schade naar rato van nabijheid.
+function explode(pos, pr) {
+  for (const t of tanks) {
+    if (t.dead || t.faction === pr.faction) continue;
+    const d = pos.distanceTo(t.group.position);
+    if (d < pr.splash) applyDamage(t, pos, pr.dmg * (1 - d / pr.splash));
+  }
+  const m = new THREE.Mesh(boomGeo, new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.7, depthWrite: false }));
+  m.position.copy(pos); scene.add(m);
+  effects.push({ mesh: m, life: 0.32, max: 0.32, r: pr.splash });
+}
+function updateEffects(dt) {
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const e = effects[i]; e.life -= dt;
+    const k = 1 - Math.max(0, e.life) / e.max;
+    e.mesh.scale.setScalar(0.5 + e.r * k);
+    e.mesh.material.opacity = 0.7 * (1 - k);
+    if (e.life <= 0) { scene.remove(e.mesh); effects.splice(i, 1); }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -476,6 +509,21 @@ function nearest(t, list) {
 }
 function yawTo(from, to) {
   return Math.atan2(to.x - from.x, to.z - from.z);
+}
+// Doelvoorspelling: richt op waar het doel ZAL zijn als de granaat aankomt.
+function leadYaw(shooter, target, projSpeed) {
+  const sp = shooter.group.position, tp = target.group.position;
+  let tt = sp.distanceTo(tp) / projSpeed;
+  const px = tp.x + target.vel.x * tt;
+  const pz = tp.z + target.vel.z * tt;
+  return Math.atan2(px - sp.x, pz - sp.z);
+}
+// Spreiding (half-hoek in rad): sneller/verder doel = minder raak; rijdend schieten = minder raak.
+function aimSpread(shooter, target, dist) {
+  return 0.03
+    + Math.min(target.speedNow, 20) * 0.011   // bewegend doel is moeilijk
+    + dist * 0.0016                            // afstand
+    + Math.min(shooter.speedNow, 20) * 0.006;  // zelf rijden = minder precies
 }
 function lerpAngle(a, b, t) {
   return a + angleDelta(a, b) * t;
@@ -617,11 +665,15 @@ function updateTank(t, dt) {
       move.add(new THREE.Vector3(-toT.z, 0, toT.x).multiplyScalar(0.6));
       move.add(t.wander.clone().multiplyScalar(0.3));
       if (move.lengthSq() > 0.001) { move.normalize(); dir.copy(move); t.heading = lerpAngle(t.heading, Math.atan2(move.x, move.z), 0.12); }
-      // richten + schieten (alleen als de toren nog leeft)
+      // richten + schieten (alleen als de toren nog leeft) — met lead + spreiding
       if (canAim) {
-        t.turretYaw = yawTo(t.group.position, target.group.position);
+        t.turretYaw = leadYaw(t, target, s.pspeed);
         t.fireTimer -= dt;
-        if (t.fireTimer <= 0 && dist < 60) { fire(t, t.turretYaw); t.fireTimer = s.cd * (0.85 + Math.random() * 0.4); }
+        if (t.fireTimer <= 0 && dist < 55) {
+          const spread = aimSpread(t, target, dist);
+          fire(t, t.turretYaw + (Math.random() * 2 - 1) * spread);
+          t.fireTimer = s.cd * (0.85 + Math.random() * 0.4);
+        }
       }
     } else {
       dir.copy(t.wander);
@@ -639,7 +691,9 @@ function updateTank(t, dt) {
   const p = t.group.position;
   p.y = terrainHeight(p.x, p.z) + GRAV_HOVER * s.scale;
   t.group.rotation.y = t.heading;
-  t.speedNow = Math.hypot(p.x - px0, p.z - pz0) / Math.max(dt, 0.001);
+  const idt = 1 / Math.max(dt, 0.001);
+  t.vel.x = (p.x - px0) * idt; t.vel.z = (p.z - pz0) * idt;
+  t.speedNow = Math.hypot(t.vel.x, t.vel.z);
 
   // camo: stil in het bos = verborgen (bully is te groot om te verstoppen)
   if (!t.parts) {
@@ -682,23 +736,39 @@ function updateProjectiles(dt) {
     const pr = projectiles[i];
     pr.mesh.position.addScaledVector(pr.vel, dt);
     pr.life -= dt;
-    let hit = false;
-    if (rockBlocks(pr.mesh.position)) {
-      hit = true; // dekking: rots slikt het schot op
+    const pos = pr.mesh.position;
+    const expired = pr.life <= 0 || Math.abs(pos.y) > 40;
+    let done = false;
+
+    if (pr.splash > 0) {
+      // Bully-granaat: ontploft bij een rots, aan het eind, óf op het dichtste punt
+      // bij een teamtank (airburst) zodat near-misses binnen de splash tóch treffen.
+      let boom = rockBlocks(pos) || expired;
+      if (!boom) {
+        let nd = Infinity;
+        for (const t of tanks) {
+          if (t.dead || t.faction === pr.faction) continue;
+          const d = pos.distanceTo(t.group.position); if (d < nd) nd = d;
+        }
+        const armed = nd < pr.splash * 1.3;
+        if (nd < 2.5) boom = true;                                   // directe treffer
+        else if (armed && nd > (pr.prevNd ?? Infinity)) boom = true; // net het dichtste punt voorbij
+        pr.prevNd = nd;
+      }
+      if (boom) { explode(pos, pr); done = true; }
     } else {
-      for (const t of tanks) {
-        if (t.dead || t.faction === pr.faction) continue;
-        if (pr.mesh.position.distanceTo(t.group.position) < t.radius) {
-          if (t.parts) damageBully(t, pr.mesh.position, pr.dmg);  // locational damage
-          else { t.hp -= pr.dmg; if (t.hp <= 0) onKill(t); }
-          hit = true;
-          break;
+      // Team-granaat: precies, één doel. Rots = dekking.
+      if (rockBlocks(pos)) done = true;
+      else {
+        for (const t of tanks) {
+          if (t.dead || t.faction === pr.faction) continue;
+          if (pos.distanceTo(t.group.position) < t.radius) { applyDamage(t, pos, pr.dmg); done = true; break; }
         }
       }
+      if (!done && expired) done = true;
     }
-    if (hit || pr.life <= 0 || Math.abs(pr.mesh.position.y) > 40) {
-      scene.remove(pr.mesh); projectiles.splice(i, 1);
-    }
+
+    if (done) { scene.remove(pr.mesh); projectiles.splice(i, 1); }
   }
 }
 
@@ -744,6 +814,7 @@ function animate() {
   if (started) {
     for (const t of tanks) updateTank(t, dt);
     updateProjectiles(dt);
+    updateEffects(dt);
     updateHUD();
     if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) toastEl.classList.remove('show'); }
   }
